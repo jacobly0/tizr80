@@ -1,0 +1,38 @@
+name: Build
+
+on: [push]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        runs-on: [ubuntu, macos, windows]
+        include:
+          - runs-on: windows
+            env: "env:"
+            exe: .exe
+    runs-on: ${{matrix.runs-on}}-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3.0.4
+
+      - name: Format
+        run: zig fmt
+
+      - name: Diff
+        run: git diff --exit-code
+
+      - name: Build
+        run: zig build
+
+      - name: Install
+        run: zig build install
+
+      - name: Upload
+        run: actions/upload-artifact@v3.1.0
+        with:
+          name: CEmuCore-${{runner.os}}
+          path: build/zig-out
+
+      - name: Test
+        run: zig build test
