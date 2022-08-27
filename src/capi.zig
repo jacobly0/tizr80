@@ -1,6 +1,8 @@
 const std = @import("std");
 
-pub const CEMUCORE_NODEBUG = std.meta.globalOption("nodebug", bool) orelse false;
+const CEmuCore = @import("cemucore.zig");
+
+pub const CEMUCORE_DEBUG_SUPPORT = CEmuCore.options.debug_support;
 
 pub const cemucore_sig = enum(c_int) {
     CEMUCORE_SIG_DEV_CHANGED,
@@ -15,20 +17,7 @@ pub const cemucore_sig = enum(c_int) {
 pub const cemucore_create_flags = c_int;
 pub const CEMUCORE_CREATE_FLAG_THREADED = @as(cemucore_create_flags, 1 << 0);
 
-pub const cemucore_prop = if (CEMUCORE_NODEBUG) enum(c_int) {
-    CEMUCORE_PROP_DEV,
-    CEMUCORE_PROP_REG,
-    CEMUCORE_PROP_REG_SHADOW,
-    CEMUCORE_PROP_KEY,
-    CEMUCORE_PROP_FLASH_SIZE,
-    CEMUCORE_PROP_MEM_Z80,
-    CEMUCORE_PROP_MEM_ADL,
-    CEMUCORE_PROP_FLASH,
-    CEMUCORE_PROP_RAM,
-    CEMUCORE_PROP_PORT,
-    CEMUCORE_PROP_GPIO_ENABLE,
-    CEMUCORE_PROP_TRANSFER,
-} else enum(c_int) {
+pub const cemucore_prop = if (CEMUCORE_DEBUG_SUPPORT) enum(c_int) {
     CEMUCORE_PROP_DEV,
     CEMUCORE_PROP_REG,
     CEMUCORE_PROP_REG_SHADOW,
@@ -51,6 +40,19 @@ pub const cemucore_prop = if (CEMUCORE_NODEBUG) enum(c_int) {
     CEMUCORE_PROP_FLASH_WATCH_FLAGS,
     CEMUCORE_PROP_RAM_WATCH_FLAGS,
     CEMUCORE_PROP_PORT_WATCH_FLAGS,
+} else enum(c_int) {
+    CEMUCORE_PROP_DEV,
+    CEMUCORE_PROP_REG,
+    CEMUCORE_PROP_REG_SHADOW,
+    CEMUCORE_PROP_KEY,
+    CEMUCORE_PROP_FLASH_SIZE,
+    CEMUCORE_PROP_MEM_Z80,
+    CEMUCORE_PROP_MEM_ADL,
+    CEMUCORE_PROP_FLASH,
+    CEMUCORE_PROP_RAM,
+    CEMUCORE_PROP_PORT,
+    CEMUCORE_PROP_GPIO_ENABLE,
+    CEMUCORE_PROP_TRANSFER,
 };
 
 pub const cemucore_dev = enum(c_int) {
@@ -123,7 +125,7 @@ pub const cemucore_reg = enum(c_int) {
     CEMUCORE_REG_RPC,
 };
 
-pub usingnamespace if (CEMUCORE_NODEBUG) struct {} else struct {
+pub usingnamespace if (CEMUCORE_DEBUG_SUPPORT) struct {
     pub const cemucore_watch_flags = c_int;
 
     pub const CEMUCORE_WATCH_AREA_PORT = @as(cemucore_watch_flags, 0 << 0);
@@ -145,10 +147,10 @@ pub usingnamespace if (CEMUCORE_NODEBUG) struct {} else struct {
     pub const CEMUCORE_WATCH_TYPE_ALL = CEMUCORE_WATCH_TYPE_READ_WRITE | CEMUCORE_WATCH_TYPE_EXECUTE;
 
     pub const CEMUCORE_WATCH_ENABLE = @as(cemucore_watch_flags, 1 << 7);
-};
+} else struct {};
 
-pub const cemucore = @import("cemucore.zig");
-pub const cemucore_sig_handler = fn (cemucore_sig, ?*anyopaque) callconv(.C) void;
+pub const cemucore = anyopaque;
+pub const cemucore_sig_handler = *const fn (cemucore_sig, ?*anyopaque) callconv(.C) void;
 
 fn AllocatorWrapper(backing_allocator: std.mem.Allocator) type {
     return struct {
@@ -173,12 +175,12 @@ const CoreWrapper = struct {
         handler: cemucore_sig_handler,
         data: ?*anyopaque,
     },
-    core: cemucore = undefined,
+    core: CEmuCore = undefined,
 
-    fn coreToSelf(core: *cemucore) *CoreWrapper {
+    fn coreToSelf(core: *CEmuCore) *CoreWrapper {
         return @fieldParentPtr(CoreWrapper, "core", core);
     }
-    fn handlerWrapper(core: *cemucore, signal: cemucore.Signal) void {
+    fn handlerWrapper(core: *CEmuCore, signal: CEmuCore.Signal) void {
         const self = coreToSelf(core).sig;
         return self.handler(@intToEnum(cemucore_sig, @enumToInt(signal)), self.data);
     }
@@ -202,7 +204,7 @@ const CoreWrapper = struct {
         });
         return &self.core;
     }
-    fn destroy(core: *cemucore) void {
+    fn destroy(core: *CEmuCore) void {
         const self = coreToSelf(core);
         core.deinit();
         if (self.allocator.deinit()) std.c.abort();
@@ -218,7 +220,7 @@ export fn cemucore_create(
     return CoreWrapper.create(create_flags, sig_handler, sig_handler_data) catch null;
 }
 export fn cemucore_destroy(core: *cemucore) callconv(.C) void {
-    return CoreWrapper.destroy(core);
+    return CoreWrapper.destroy(@ptrCast(*CEmuCore, core));
 }
 
 export fn cemucore_get(
@@ -226,8 +228,8 @@ export fn cemucore_get(
     prop: cemucore_prop,
     addr: i32,
 ) callconv(.C) i32 {
-    return core.get(
-        @intToEnum(cemucore.Property, @enumToInt(prop)),
+    return @ptrCast(*CEmuCore, core).get(
+        @intToEnum(CEmuCore.Property, @enumToInt(prop)),
         std.math.cast(u24, addr) orelse return -1,
     ) orelse -1;
 }
@@ -238,8 +240,8 @@ export fn cemucore_get_buffer(
     buf: *anyopaque,
     len: u32,
 ) callconv(.C) void {
-    return core.getBuffer(
-        @intToEnum(cemucore.Property, @enumToInt(prop)),
+    return @ptrCast(*CEmuCore, core).getBuffer(
+        @intToEnum(CEmuCore.Property, @enumToInt(prop)),
         std.math.cast(u24, addr) orelse return,
         @ptrCast([*]u8, buf)[0..len],
     );
@@ -250,8 +252,8 @@ export fn cemucore_set(
     addr: i32,
     val: i32,
 ) callconv(.C) void {
-    return core.set(
-        @intToEnum(cemucore.Property, @enumToInt(prop)),
+    return @ptrCast(*CEmuCore, core).set(
+        @intToEnum(CEmuCore.Property, @enumToInt(prop)),
         std.math.cast(u24, addr) orelse return,
         std.math.cast(u24, val),
     );
@@ -263,8 +265,8 @@ export fn cemucore_set_buffer(
     buf: *const anyopaque,
     len: u32,
 ) callconv(.C) void {
-    return core.setBuffer(
-        @intToEnum(cemucore.Property, @enumToInt(prop)),
+    return @ptrCast(*CEmuCore, core).setBuffer(
+        @intToEnum(CEmuCore.Property, @enumToInt(prop)),
         std.math.cast(u24, addr) orelse return,
         @ptrCast([*]const u8, buf)[0..len],
     );
@@ -273,5 +275,5 @@ export fn cemucore_command(
     core: *cemucore,
     command: [*:null]?[*:0]u8,
 ) callconv(.C) c_int {
-    return core.doCommand(std.mem.sliceTo(command, null));
+    return @ptrCast(*CEmuCore, core).doCommand(std.mem.sliceTo(command, null));
 }

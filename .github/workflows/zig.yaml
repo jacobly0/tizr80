@@ -7,6 +7,7 @@ jobs:
     strategy:
       matrix:
         runs-on: [ubuntu, macos, windows]
+        build-mode: [Debug, ReleaseSafe, ReleaseFast, ReleaseSmall]
         include:
           - runs-on: windows
             env: "env:"
@@ -23,13 +24,13 @@ jobs:
         run: git diff --exit-code
 
       - name: Build
-        run: zig build
+        run: zig build -Dmode=
 
       - name: Install
         run: zig build install
 
       - name: Upload
-        run: actions/upload-artifact@v3.1.0
+        uses: actions/upload-artifact@v3.1.0
         with:
           name: CEmuCore-${{runner.os}}
           path: build/zig-out

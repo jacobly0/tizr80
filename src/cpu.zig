@@ -55,6 +55,7 @@ pub const RegisterAddress = enum {
 };
 
 cf: bool = false,
+nf: bool = false,
 pv: bool = false,
 xf: bool = false,
 hc: bool = false,

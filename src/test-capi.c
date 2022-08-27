@@ -6,6 +6,12 @@
 int main(int argc, char *argv[]) {
     fprintf(stderr, "Running %s tests.\n", strrchr(argv[0], '/') + 1);
 
+    fprintf(stderr, "NDEBUG");
+#ifndef NDEBUG
+    fprintf(stderr, " not");
+#endif
+    fprintf(stderr, " defined\n");
+
     cemucore_t *core =
         cemucore_create(CEMUCORE_CREATE_FLAG_THREADED, NULL, NULL);
     cemucore_destroy(core);

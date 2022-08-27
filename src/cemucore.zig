@@ -4,7 +4,7 @@ const Sync = @import("sync.zig");
 const Mem = @import("mem.zig");
 const Cpu = @import("cpu.zig");
 
-pub const nodebug = std.meta.globalOption("nodebug", bool) orelse false;
+pub const options = @import("options");
 
 pub const Signal = enum {
     DevChanged,
@@ -22,23 +22,10 @@ pub const CreateOptions = struct {
         .SingleThreaded
     else
         .MultiThreaded,
-    signal_handler: ?SignalHandler = null,
+    signal_handler: SignalHandler = null,
 };
 
-pub const Property = if (nodebug) enum {
-    Dev,
-    Reg,
-    RegShadow,
-    Key,
-    FlashSize,
-    MemZ80,
-    MemAdl,
-    Flash,
-    Ram,
-    Port,
-    GpioEnable,
-    Transfer,
-} else enum {
+pub const Property = if (options.debug_support) enum {
     Dev,
     Reg,
     RegShadow,
@@ -61,6 +48,19 @@ pub const Property = if (nodebug) enum {
     FlashWatchFlags,
     RamWatchFlags,
     PortWatchFlags,
+} else enum {
+    Dev,
+    Reg,
+    RegShadow,
+    Key,
+    FlashSize,
+    MemZ80,
+    MemAdl,
+    Flash,
+    Ram,
+    Port,
+    GpioEnable,
+    Transfer,
 };
 
 pub const Device = enum {
@@ -82,29 +82,29 @@ pub const TransferAddress = enum {
 
 pub const RegisterAddress = Cpu.RegisterAddress;
 
-pub const SignalHandler = fn (*CEmuCore, Signal) void;
+pub const SignalHandler = ?*const fn (*CEmuCore, Signal) void;
 
 const CEmuCore = @This();
 
 allocator: std.mem.Allocator,
-signal_handler: ?SignalHandler,
+signal_handler: ?*const fn (*CEmuCore, Signal) void,
 sync: Sync = undefined,
 mem: Mem = undefined,
 cpu: Cpu = undefined,
 
-pub fn create(options: CreateOptions) !*CEmuCore {
-    const self = try options.allocator.create(CEmuCore);
-    errdefer options.allocator.destroy(self);
+pub fn create(create_options: CreateOptions) !*CEmuCore {
+    const self = try create_options.allocator.create(CEmuCore);
+    errdefer create_options.allocator.destroy(self);
 
-    try self.init(options);
+    try self.init(create_options);
     return self;
 }
-pub fn init(self: *CEmuCore, options: CreateOptions) !void {
+pub fn init(self: *CEmuCore, create_options: CreateOptions) !void {
     self.* = CEmuCore{
-        .allocator = options.allocator,
-        .signal_handler = options.signal_handler,
+        .allocator = create_options.allocator,
+        .signal_handler = create_options.signal_handler,
     };
-    try self.sync.init(options.threading);
+    try self.sync.init(create_options.threading);
     try self.mem.init();
     try self.cpu.init();
 }
