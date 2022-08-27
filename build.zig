@@ -4,6 +4,14 @@ pub fn build(b: *std.build.Builder) !void {
     const project_name = std.fs.path.basename(b.build_root);
 
     const mode = b.standardReleaseOptions();
+    const debugger = b.option(
+        bool,
+        "debugger",
+        "Enable support for debugger features. (default: true)",
+    ) orelse true;
+
+    const options = b.addOptions();
+    options.addOption(bool, "debugger", debugger);
 
     const zig_fmt = b.addFmt(&.{ @src().file, "src" });
 
@@ -56,10 +64,18 @@ pub fn build(b: *std.build.Builder) !void {
     inline for (@typeInfo(@TypeOf(libraries)).Struct.fields) |field| {
         const library = @field(libraries, field.name);
         library.setBuildMode(mode);
+        library.addOptions("options", options);
         library.linkLibC();
         library.install();
 
         const test_api = b.addExecutable("test-capi-" ++ field.name, null);
+        switch (mode) {
+            .Debug => {},
+            .ReleaseSafe, .ReleaseFast, .ReleaseSmall => test_api.defineCMacro("NDEBUG", null),
+        }
+        test_api.defineCMacro(b.fmt("{s}_DEBUGGER", .{
+            try std.ascii.allocUpperString(b.allocator, project_name),
+        }), b.fmt("{}", .{@boolToInt(debugger)}));
         test_api.defineCMacro(b.fmt("{s}_{s}", .{
             try std.ascii.allocUpperString(b.allocator, project_name),
             try std.ascii.allocUpperString(b.allocator, field.name),

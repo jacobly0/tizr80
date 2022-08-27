@@ -41,7 +41,7 @@ typedef enum cemucore_prop {
     CEMUCORE_PROP_PORT,
     CEMUCORE_PROP_GPIO_ENABLE,
     CEMUCORE_PROP_TRANSFER,
-#ifndef CEMUCORE_NODEBUG
+#if CEMUCORE_DEBUGGER
     CEMUCORE_PROP_WATCH,
     CEMUCORE_PROP_WATCH_ADDR,
     CEMUCORE_PROP_WATCH_SIZE,
@@ -124,7 +124,7 @@ typedef enum cemucore_reg {
     CEMUCORE_REG_RPC,
 } cemucore_reg_t;
 
-#ifndef CEMUCORE_NODEBUG
+#if CEMUCORE_DEBUGGER
 typedef enum cemucore_watch_flags {
     CEMUCORE_WATCH_AREA_PORT = 0 << 0,
     CEMUCORE_WATCH_AREA_MEM = 1 << 0,

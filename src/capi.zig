@@ -2,7 +2,7 @@ const std = @import("std");
 
 const CEmuCore = @import("cemucore.zig");
 
-pub const CEMUCORE_DEBUG_SUPPORT = CEmuCore.options.debug_support;
+pub const CEMUCORE_DEBUGGER = CEmuCore.options.debugger;
 
 pub const cemucore_sig = enum(c_int) {
     CEMUCORE_SIG_DEV_CHANGED,
@@ -17,7 +17,7 @@ pub const cemucore_sig = enum(c_int) {
 pub const cemucore_create_flags = c_int;
 pub const CEMUCORE_CREATE_FLAG_THREADED = @as(cemucore_create_flags, 1 << 0);
 
-pub const cemucore_prop = if (CEMUCORE_DEBUG_SUPPORT) enum(c_int) {
+pub const cemucore_prop = if (CEMUCORE_DEBUGGER) enum(c_int) {
     CEMUCORE_PROP_DEV,
     CEMUCORE_PROP_REG,
     CEMUCORE_PROP_REG_SHADOW,
@@ -125,7 +125,7 @@ pub const cemucore_reg = enum(c_int) {
     CEMUCORE_REG_RPC,
 };
 
-pub usingnamespace if (CEMUCORE_DEBUG_SUPPORT) struct {
+pub usingnamespace if (CEMUCORE_DEBUGGER) struct {
     pub const cemucore_watch_flags = c_int;
 
     pub const CEMUCORE_WATCH_AREA_PORT = @as(cemucore_watch_flags, 0 << 0);

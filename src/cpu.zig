@@ -90,7 +90,55 @@ fn RegisterType(address: RegisterAddress) type {
 
 pub fn get(self: *Cpu, address: RegisterAddress) RegisterType(address) {
     return switch (address) {
+        // 1-bit flags
         .CarryFlag => self.cf,
+        .ParityOverflowFlag => self.pv,
+        .XFlag => self.xf,
+        .HalfCarryFlag => self.hc,
+        .YFlag => self.yf,
+        .ZeroFlag => self.zf,
+        .SignFlag => self.sf,
+
+        // 8-bit registers
+        .F => std.debug.todo("unimplemented"),
+        .A => std.debug.todo("unimplemented"),
+        .C => std.debug.todo("unimplemented"),
+        .B => std.debug.todo("unimplemented"),
+        .BCU => std.debug.todo("unimplemented"),
+        .E => std.debug.todo("unimplemented"),
+        .D => std.debug.todo("unimplemented"),
+        .DEU => std.debug.todo("unimplemented"),
+        .L => std.debug.todo("unimplemented"),
+        .H => std.debug.todo("unimplemented"),
+        .HLU => std.debug.todo("unimplemented"),
+        .IXL => std.debug.todo("unimplemented"),
+        .IXH => std.debug.todo("unimplemented"),
+        .IXU => std.debug.todo("unimplemented"),
+        .IYL => std.debug.todo("unimplemented"),
+        .IYH => std.debug.todo("unimplemented"),
+        .IYU => std.debug.todo("unimplemented"),
+        .R => std.debug.todo("unimplemented"),
+        .MB => std.debug.todo("unimplemented"),
+
+        // 16-bit registers
+        .AF => std.debug.todo("unimplemented"),
+        .BC => std.debug.todo("unimplemented"),
+        .DE => std.debug.todo("unimplemented"),
+        .HL => std.debug.todo("unimplemented"),
+        .IX => std.debug.todo("unimplemented"),
+        .IY => std.debug.todo("unimplemented"),
+        .SPS => std.debug.todo("unimplemented"),
+        .I => std.debug.todo("unimplemented"),
+
+        // 24-bit registers
+        .UBC => std.debug.todo("unimplemented"),
+        .UDE => std.debug.todo("unimplemented"),
+        .UHL => std.debug.todo("unimplemented"),
+        .UIX => std.debug.todo("unimplemented"),
+        .UIY => std.debug.todo("unimplemented"),
+        .SPL => std.debug.todo("unimplemented"),
+        .PC => std.debug.todo("unimplemented"),
+        .RPC => std.debug.todo("unimplemented"),
     };
 }
 

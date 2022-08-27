@@ -25,7 +25,7 @@ pub const CreateOptions = struct {
     signal_handler: SignalHandler = null,
 };
 
-pub const Property = if (options.debug_support) enum {
+pub const Property = if (options.debugger) enum {
     Dev,
     Reg,
     RegShadow,
