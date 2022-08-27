@@ -51,6 +51,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     const main_tests = b.addTest(b.fmt("src/{s}.zig", .{project_name}));
     main_tests.setBuildMode(mode);
+    main_tests.addOptions("options", options);
 
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(fmt_step);
@@ -67,6 +68,7 @@ pub fn build(b: *std.build.Builder) !void {
         library.addOptions("options", options);
         library.linkLibC();
         library.install();
+        library.step.dependOn(fmt_step);
 
         const test_api = b.addExecutable("test-capi-" ++ field.name, null);
         switch (mode) {

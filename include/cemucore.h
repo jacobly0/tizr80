@@ -130,9 +130,8 @@ typedef enum cemucore_watch_flags {
     CEMUCORE_WATCH_AREA_MEM = 1 << 0,
     CEMUCORE_WATCH_AREA_FLASH = 2 << 0,
     CEMUCORE_WATCH_AREA_RAM = 3 << 0,
-    CEMUCORE_WATCH_AREA_MASK =
-        CEMUCORE_WATCH_AREA_PORT | CEMUCORE_WATCH_AREA_MEM |
-        CEMUCORE_WATCH_AREA_FLASH | CEMUCORE_WATCH_AREA_RAM,
+    CEMUCORE_WATCH_AREA_MASK = CEMUCORE_WATCH_AREA_PORT | CEMUCORE_WATCH_AREA_MEM |
+                               CEMUCORE_WATCH_AREA_FLASH | CEMUCORE_WATCH_AREA_RAM,
 
     CEMUCORE_WATCH_MODE_PORT = 0 << 2,
     CEMUCORE_WATCH_MODE_Z80 = 1 << 2,
@@ -141,11 +140,9 @@ typedef enum cemucore_watch_flags {
 
     CEMUCORE_WATCH_TYPE_READ = 1 << 4,
     CEMUCORE_WATCH_TYPE_WRITE = 1 << 5,
-    CEMUCORE_WATCH_TYPE_READ_WRITE =
-        CEMUCORE_WATCH_TYPE_READ | CEMUCORE_WATCH_TYPE_WRITE,
+    CEMUCORE_WATCH_TYPE_READ_WRITE = CEMUCORE_WATCH_TYPE_READ | CEMUCORE_WATCH_TYPE_WRITE,
     CEMUCORE_WATCH_TYPE_EXECUTE = 1 << 6,
-    CEMUCORE_WATCH_TYPE_ALL =
-        CEMUCORE_WATCH_TYPE_READ_WRITE | CEMUCORE_WATCH_TYPE_EXECUTE,
+    CEMUCORE_WATCH_TYPE_ALL = CEMUCORE_WATCH_TYPE_READ_WRITE | CEMUCORE_WATCH_TYPE_EXECUTE,
 
     CEMUCORE_WATCH_ENABLE = 1 << 7,
 } cemucore_watch_flags_t;
@@ -159,22 +156,19 @@ extern "C" {
 
 typedef void (*cemucore_sig_handler_t)(cemucore_sig_t, void *);
 
-CEMUCORE_EXPORT cemucore_t *
-cemucore_create(cemucore_create_flags_t create_flags,
-                cemucore_sig_handler_t sig_handler, void *sig_handler_data);
+CEMUCORE_EXPORT cemucore_t *cemucore_create(cemucore_create_flags_t create_flags,
+                                            cemucore_sig_handler_t sig_handler,
+                                            void *sig_handler_data);
 CEMUCORE_EXPORT cemucore_t *cemucore_destroy(cemucore_t *core);
 
-CEMUCORE_EXPORT int32_t cemucore_get(cemucore_t *core, cemucore_prop_t prop,
-                                     int32_t addr);
-CEMUCORE_EXPORT void cemucore_get_buffer(cemucore_t *core, cemucore_prop_t prop,
-                                         int32_t addr, void *buf, uint32_t len);
-CEMUCORE_EXPORT void cemucore_set(cemucore_t *core, cemucore_prop_t prop,
-                                  int32_t addr, int32_t val);
-CEMUCORE_EXPORT void cemucore_set_buffer(cemucore_t *core, cemucore_prop_t prop,
-                                         int32_t addr, const void *buf,
-                                         uint32_t len);
-CEMUCORE_EXPORT int cemucore_command(cemucore_t *core,
-                                     const char *const *command);
+CEMUCORE_EXPORT int32_t cemucore_get(cemucore_t *core, cemucore_prop_t prop, int32_t addr);
+CEMUCORE_EXPORT void cemucore_get_buffer(cemucore_t *core, cemucore_prop_t prop, int32_t addr,
+                                         void *buf, uint32_t len);
+CEMUCORE_EXPORT void cemucore_set(cemucore_t *core, cemucore_prop_t prop, int32_t addr,
+                                  int32_t val);
+CEMUCORE_EXPORT void cemucore_set_buffer(cemucore_t *core, cemucore_prop_t prop, int32_t addr,
+                                         const void *buf, uint32_t len);
+CEMUCORE_EXPORT int cemucore_command(cemucore_t *core, const char *const *command);
 
 CEMUCORE_EXPORT bool cemucore_sleep(cemucore_t *core);
 CEMUCORE_EXPORT bool cemucore_wake(cemucore_t *core);

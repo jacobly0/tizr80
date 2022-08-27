@@ -126,16 +126,22 @@ fn property_needs_sync(property: Property) bool {
 }
 
 pub fn get(self: *CEmuCore, property: Property, address: u24) ?u24 {
-    _ = self;
-    _ = property;
-    _ = address;
-
     const needs_sync = property_needs_sync(property);
     if (needs_sync) self.sync.enter();
     defer if (needs_sync) self.sync.leave();
 
     return switch (property) {
-        else => unreachable,
+        .Reg => inline for (@typeInfo(RegisterAddress).Enum.fields) |field| {
+            if (address == field.value) {
+                break self.cpu.get(@field(RegisterAddress, field.name));
+            }
+        } else unreachable,
+        .RegShadow => inline for (@typeInfo(RegisterAddress).Enum.fields) |field| {
+            if (address == field.value) {
+                break self.cpu.getShadow(@field(RegisterAddress, field.name));
+            }
+        } else unreachable,
+        else => std.debug.todo("unimplemented"),
     };
 }
 pub fn getBuffer(self: *CEmuCore, property: Property, address: u24, buffer: []u8) void {
@@ -145,10 +151,29 @@ pub fn getBuffer(self: *CEmuCore, property: Property, address: u24, buffer: []u8
     _ = buffer;
 }
 pub fn set(self: *CEmuCore, property: Property, address: u24, value: ?u24) void {
-    _ = self;
-    _ = property;
-    _ = address;
-    _ = value;
+    const needs_sync = property_needs_sync(property);
+    if (needs_sync) self.sync.enter();
+    defer if (needs_sync) self.sync.leave();
+
+    switch (property) {
+        .Reg => inline for (@typeInfo(RegisterAddress).Enum.fields) |field| {
+            if (address == field.value) {
+                const register_address = @field(RegisterAddress, field.name);
+                const register_type = Cpu.RegisterType(register_address);
+                self.cpu.set(register_address, @intCast(register_type, value.?));
+                break;
+            }
+        } else unreachable,
+        .RegShadow => inline for (@typeInfo(RegisterAddress).Enum.fields) |field| {
+            if (address == field.value) {
+                const register_address = @field(RegisterAddress, field.name);
+                const register_type = Cpu.RegisterType(register_address);
+                self.cpu.setShadow(register_address, @intCast(register_type, value.?));
+                break;
+            }
+        } else unreachable,
+        else => std.debug.todo("unimplemented"),
+    }
 }
 pub fn setBuffer(self: *CEmuCore, property: Property, address: u24, buffer: []const u8) void {
     _ = self;
@@ -162,12 +187,15 @@ pub fn doCommand(self: *CEmuCore, arguments: [:null]?[*:0]u8) i32 {
     return 0;
 }
 
-test {
+test "create" {
     const core = try CEmuCore.create(.{ .allocator = std.testing.allocator });
     defer core.destroy();
+
+    core.set(.Reg, @enumToInt(RegisterAddress.CarryFlag), 1);
+    try std.testing.expectEqual(@as(?u24, 1), core.get(.Reg, @enumToInt(RegisterAddress.CarryFlag)));
 }
 
-test {
+test "init" {
     const core = try std.testing.allocator.create(CEmuCore);
     defer std.testing.allocator.destroy(core);
 
