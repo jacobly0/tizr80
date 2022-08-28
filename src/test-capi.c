@@ -12,8 +12,9 @@ expect_fail(const char *file, int line, const char *function, const char *condit
 }
 #define expect(condition)                                                                          \
     do                                                                                             \
-        if (condition) {                                                                           \
-        } else                                                                                     \
+        if (condition)                                                                             \
+            ;                                                                                      \
+        else                                                                                       \
             expect_fail(__FILE__, __LINE__, __FUNCTION__, #condition);                             \
     while (0)
 
@@ -121,5 +122,5 @@ int main(int argc, char *argv[]) {
     cemucore_destroy(core);
     core = NULL;
 
-    fprintf(stderr, "Tests passed.\n");
+    fprintf(stderr, "All tests passed.\n");
 }

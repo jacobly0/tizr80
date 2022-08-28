@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 
 const Sync = @import("sync.zig");
@@ -18,7 +19,7 @@ pub const Signal = enum {
 
 pub const CreateOptions = struct {
     allocator: std.mem.Allocator,
-    threading: Sync.Threading = if (@import("builtin").single_threaded)
+    threading: enum { SingleThreaded, MultiThreaded } = if (builtin.single_threaded)
         .SingleThreaded
     else
         .MultiThreaded,
@@ -91,6 +92,7 @@ signal_handler: ?*const fn (*CEmuCore, Signal) void,
 sync: Sync = undefined,
 mem: Mem = undefined,
 cpu: Cpu = undefined,
+thread: ?std.Thread = null,
 
 pub fn create(create_options: CreateOptions) !*CEmuCore {
     const self = try create_options.allocator.create(CEmuCore);
@@ -100,15 +102,34 @@ pub fn create(create_options: CreateOptions) !*CEmuCore {
     return self;
 }
 pub fn init(self: *CEmuCore, create_options: CreateOptions) !void {
+    errdefer self.deinit();
     self.* = CEmuCore{
         .allocator = create_options.allocator,
         .signal_handler = create_options.signal_handler,
     };
-    try self.sync.init(create_options.threading);
+    try self.sync.init();
     try self.mem.init();
     try self.cpu.init();
+    switch (create_options.threading) {
+        .SingleThreaded => {},
+        .MultiThreaded => {
+            std.debug.assert(!builtin.single_threaded);
+            const thread = try std.Thread.spawn(
+                .{},
+                runLoop,
+                .{self},
+            );
+            const name = "cemucore";
+            thread.setName(name[0..std.math.min(name.len, std.Thread.max_name_len)]) catch {};
+            self.thread = thread;
+        },
+    }
+    self.sync.start();
 }
+
 pub fn deinit(self: *CEmuCore) void {
+    self.sync.stop();
+    if (self.thread) |thread| thread.join();
     self.cpu.deinit();
     self.mem.deinit();
     self.sync.deinit();
@@ -187,12 +208,16 @@ pub fn doCommand(self: *CEmuCore, arguments: [:null]?[*:0]u8) i32 {
     return 0;
 }
 
+pub fn runLoop(self: *CEmuCore) void {
+    while (self.sync.loop()) {
+        if (!self.sync.delay(std.time.ns_per_s / 10)) break;
+    } else return;
+    std.debug.assert(!self.sync.loop());
+}
+
 test "create" {
     const core = try CEmuCore.create(.{ .allocator = std.testing.allocator });
     defer core.destroy();
-
-    core.set(.Reg, @enumToInt(RegisterAddress.CarryFlag), 1);
-    try std.testing.expectEqual(@as(?u24, 1), core.get(.Reg, @enumToInt(RegisterAddress.CarryFlag)));
 }
 
 test "init" {
