@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const Cpu = @This();
+const util = @import("util.zig");
 
 pub const RegisterAddress = enum {
     // 1-bit flags
@@ -64,54 +65,22 @@ const Flags = packed struct(u8) {
     yf: u1,
     zf: u1,
     sf: u1,
-
-    const Backing = @typeInfo(@This()).Struct.backing_integer.?;
-    pub fn from(value: Backing) @This() {
-        return @bitCast(@This(), value);
-    }
-    pub fn all(self: @This()) Backing {
-        return @bitCast(Backing, self);
-    }
 };
 
 const u8u8 = packed struct(u16) {
     low: u8,
     high: u8,
-
-    const Backing = @typeInfo(@This()).Struct.backing_integer.?;
-    pub fn from(value: Backing) @This() {
-        return @bitCast(@This(), value);
-    }
-    pub fn all(self: @This()) Backing {
-        return @bitCast(Backing, self);
-    }
 };
 
 const u8u8u8 = packed struct(u24) {
     low: u8,
     high: u8,
     upper: u8,
-
-    const Backing = @typeInfo(@This()).Struct.backing_integer.?;
-    pub fn from(value: Backing) @This() {
-        return @bitCast(@This(), value);
-    }
-    pub fn all(self: @This()) Backing {
-        return @bitCast(Backing, self);
-    }
 };
 
 const u8u16 = packed struct(u24) {
     short: u16,
     upper: u8,
-
-    const Backing = @typeInfo(@This()).Struct.backing_integer.?;
-    pub fn from(value: Backing) @This() {
-        return @bitCast(@This(), value);
-    }
-    pub fn all(self: @This()) Backing {
-        return @bitCast(Backing, self);
-    }
 };
 
 cf: u1 = 0,
@@ -142,7 +111,7 @@ pc: u24 = 0,
 r: u8 = 0,
 mbi: u24 = 0,
 
-pub fn RegisterType(address: RegisterAddress) type {
+pub fn RegisterType(comptime address: RegisterAddress) type {
     return switch (address) {
         .CarryFlag, .SubtractFlag, .ParityOverflowFlag, .XFlag, .HalfCarryFlag, .YFlag, .ZeroFlag, .SignFlag => u1,
         .F, .A, .C, .B, .BCU, .E, .D, .DEU, .L, .H, .HLU, .IXL, .IXH, .IXU, .IYL, .IYH, .IYU, .R, .MB => u8,
@@ -151,7 +120,7 @@ pub fn RegisterType(address: RegisterAddress) type {
     };
 }
 
-pub fn get(self: *const Cpu, address: RegisterAddress) RegisterType(address) {
+pub fn get(self: *const Cpu, comptime address: RegisterAddress) RegisterType(address) {
     return switch (address) {
         // 1-bit flags
         .CarryFlag => self.cf,
@@ -164,7 +133,7 @@ pub fn get(self: *const Cpu, address: RegisterAddress) RegisterType(address) {
         .SignFlag => self.sf,
 
         // 8-bit registers
-        .F => Flags.all(.{
+        .F => util.toBacking(Flags{
             .cf = self.get(.CarryFlag),
             .nf = self.get(.SubtractFlag),
             .pv = self.get(.ParityOverflowFlag),
@@ -175,33 +144,33 @@ pub fn get(self: *const Cpu, address: RegisterAddress) RegisterType(address) {
             .sf = self.get(.SignFlag),
         }),
         .A => self.a,
-        .C => u8u8u8.from(self.get(.UBC)).low,
-        .B => u8u8u8.from(self.get(.UBC)).high,
-        .BCU => u8u8u8.from(self.get(.UBC)).upper,
-        .E => u8u8u8.from(self.get(.UDE)).low,
-        .D => u8u8u8.from(self.get(.UDE)).high,
-        .DEU => u8u8u8.from(self.get(.UDE)).upper,
-        .L => u8u8u8.from(self.get(.UHL)).low,
-        .H => u8u8u8.from(self.get(.UHL)).high,
-        .HLU => u8u8u8.from(self.get(.UHL)).upper,
-        .IXL => u8u8u8.from(self.get(.UIX)).low,
-        .IXH => u8u8u8.from(self.get(.UIX)).high,
-        .IXU => u8u8u8.from(self.get(.UIX)).upper,
-        .IYL => u8u8u8.from(self.get(.UIY)).low,
-        .IYH => u8u8u8.from(self.get(.UIY)).high,
-        .IYU => u8u8u8.from(self.get(.UIY)).upper,
+        .C => util.fromBacking(u8u8u8, self.get(.UBC)).low,
+        .B => util.fromBacking(u8u8u8, self.get(.UBC)).high,
+        .BCU => util.fromBacking(u8u8u8, self.get(.UBC)).upper,
+        .E => util.fromBacking(u8u8u8, self.get(.UDE)).low,
+        .D => util.fromBacking(u8u8u8, self.get(.UDE)).high,
+        .DEU => util.fromBacking(u8u8u8, self.get(.UDE)).upper,
+        .L => util.fromBacking(u8u8u8, self.get(.UHL)).low,
+        .H => util.fromBacking(u8u8u8, self.get(.UHL)).high,
+        .HLU => util.fromBacking(u8u8u8, self.get(.UHL)).upper,
+        .IXL => util.fromBacking(u8u8u8, self.get(.UIX)).low,
+        .IXH => util.fromBacking(u8u8u8, self.get(.UIX)).high,
+        .IXU => util.fromBacking(u8u8u8, self.get(.UIX)).upper,
+        .IYL => util.fromBacking(u8u8u8, self.get(.UIY)).low,
+        .IYH => util.fromBacking(u8u8u8, self.get(.UIY)).high,
+        .IYU => util.fromBacking(u8u8u8, self.get(.UIY)).upper,
         .R => std.math.rotr(u8, self.r, 1),
-        .MB => u8u8u8.from(self.mbi).upper,
+        .MB => util.fromBacking(u8u8u8, self.mbi).upper,
 
         // 16-bit registers
-        .AF => u8u8.all(.{ .low = self.get(.F), .high = self.get(.A) }),
-        .BC => u8u16.from(self.get(.UBC)).short,
-        .DE => u8u16.from(self.get(.UDE)).short,
-        .HL => u8u16.from(self.get(.UHL)).short,
-        .IX => u8u16.from(self.get(.UIX)).short,
-        .IY => u8u16.from(self.get(.UIY)).short,
+        .AF => util.toBacking(u8u8{ .low = self.get(.F), .high = self.get(.A) }),
+        .BC => util.fromBacking(u8u16, self.get(.UBC)).short,
+        .DE => util.fromBacking(u8u16, self.get(.UDE)).short,
+        .HL => util.fromBacking(u8u16, self.get(.UHL)).short,
+        .IX => util.fromBacking(u8u16, self.get(.UIX)).short,
+        .IY => util.fromBacking(u8u16, self.get(.UIY)).short,
         .SPS => self.sps,
-        .I => u8u16.from(self.mbi).short,
+        .I => util.fromBacking(u8u16, self.mbi).short,
 
         // 24-bit registers
         .UBC => self.bc,
@@ -215,37 +184,37 @@ pub fn get(self: *const Cpu, address: RegisterAddress) RegisterType(address) {
     };
 }
 
-pub fn getShadow(self: *const Cpu, address: RegisterAddress) RegisterType(address) {
+pub fn getShadow(self: *const Cpu, comptime address: RegisterAddress) RegisterType(address) {
     return switch (address) {
         // 1-bit flags
-        .CarryFlag => Flags.from(self.getShadow(.F)).cf,
-        .SubtractFlag => Flags.from(self.getShadow(.F)).nf,
-        .ParityOverflowFlag => Flags.from(self.getShadow(.F)).pv,
-        .XFlag => Flags.from(self.getShadow(.F)).xf,
-        .HalfCarryFlag => Flags.from(self.getShadow(.F)).hc,
-        .YFlag => Flags.from(self.getShadow(.F)).yf,
-        .ZeroFlag => Flags.from(self.getShadow(.F)).zf,
-        .SignFlag => Flags.from(self.getShadow(.F)).sf,
+        .CarryFlag => util.fromBacking(Flags, self.getShadow(.F)).cf,
+        .SubtractFlag => util.fromBacking(Flags, self.getShadow(.F)).nf,
+        .ParityOverflowFlag => util.fromBacking(Flags, self.getShadow(.F)).pv,
+        .XFlag => util.fromBacking(Flags, self.getShadow(.F)).xf,
+        .HalfCarryFlag => util.fromBacking(Flags, self.getShadow(.F)).hc,
+        .YFlag => util.fromBacking(Flags, self.getShadow(.F)).yf,
+        .ZeroFlag => util.fromBacking(Flags, self.getShadow(.F)).zf,
+        .SignFlag => util.fromBacking(Flags, self.getShadow(.F)).sf,
 
         // 8-bit registers
-        .F => u8u8.from(self.getShadow(.AF)).low,
-        .A => u8u8.from(self.getShadow(.AF)).high,
-        .C => u8u8u8.from(self.getShadow(.UBC)).low,
-        .B => u8u8u8.from(self.getShadow(.UBC)).high,
-        .BCU => u8u8u8.from(self.getShadow(.UBC)).upper,
-        .E => u8u8u8.from(self.getShadow(.UDE)).low,
-        .D => u8u8u8.from(self.getShadow(.UDE)).high,
-        .DEU => u8u8u8.from(self.getShadow(.UDE)).upper,
-        .L => u8u8u8.from(self.getShadow(.UHL)).low,
-        .H => u8u8u8.from(self.getShadow(.UHL)).high,
-        .HLU => u8u8u8.from(self.getShadow(.UHL)).upper,
+        .F => util.fromBacking(u8u8, self.getShadow(.AF)).low,
+        .A => util.fromBacking(u8u8, self.getShadow(.AF)).high,
+        .C => util.fromBacking(u8u8u8, self.getShadow(.UBC)).low,
+        .B => util.fromBacking(u8u8u8, self.getShadow(.UBC)).high,
+        .BCU => util.fromBacking(u8u8u8, self.getShadow(.UBC)).upper,
+        .E => util.fromBacking(u8u8u8, self.getShadow(.UDE)).low,
+        .D => util.fromBacking(u8u8u8, self.getShadow(.UDE)).high,
+        .DEU => util.fromBacking(u8u8u8, self.getShadow(.UDE)).upper,
+        .L => util.fromBacking(u8u8u8, self.getShadow(.UHL)).low,
+        .H => util.fromBacking(u8u8u8, self.getShadow(.UHL)).high,
+        .HLU => util.fromBacking(u8u8u8, self.getShadow(.UHL)).upper,
         .IXL, .IXH, .IXU, .IYU, .IYL, .IYH, .R, .MB => unreachable,
 
         // 16-bit registers
         .AF => self.@"af'",
-        .BC => u8u16.from(self.getShadow(.UBC)).short,
-        .DE => u8u16.from(self.getShadow(.UDE)).short,
-        .HL => u8u16.from(self.getShadow(.UHL)).short,
+        .BC => util.fromBacking(u8u16, self.getShadow(.UBC)).short,
+        .DE => util.fromBacking(u8u16, self.getShadow(.UDE)).short,
+        .HL => util.fromBacking(u8u16, self.getShadow(.UHL)).short,
         .IX, .IY, .SPS, .I => unreachable,
 
         // 24-bit registers
@@ -256,7 +225,7 @@ pub fn getShadow(self: *const Cpu, address: RegisterAddress) RegisterType(addres
     };
 }
 
-pub fn set(self: *Cpu, address: RegisterAddress, value: RegisterType(address)) void {
+pub fn set(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(address)) void {
     switch (address) {
         // 1-bit flags
         .CarryFlag => self.cf = value,
@@ -270,7 +239,7 @@ pub fn set(self: *Cpu, address: RegisterAddress, value: RegisterType(address)) v
 
         // 8-bit registers
         .F => {
-            const flags = Flags.from(value);
+            const flags = util.fromBacking(Flags, value);
             self.set(.CarryFlag, flags.cf);
             self.set(.SubtractFlag, flags.nf);
             self.set(.ParityOverflowFlag, flags.pv);
@@ -301,8 +270,8 @@ pub fn set(self: *Cpu, address: RegisterAddress, value: RegisterType(address)) v
 
         // 16-bit registers
         .AF => {
-            self.set(.F, u8u8.from(value).low);
-            self.set(.A, u8u8.from(value).high);
+            self.set(.F, util.fromBacking(u8u8, value).low);
+            self.set(.A, util.fromBacking(u8u8, value).high);
         },
         .BC => @ptrCast(*u8u16, &self.bc).short = value,
         .DE => @ptrCast(*u8u16, &self.de).short = value,
@@ -324,7 +293,7 @@ pub fn set(self: *Cpu, address: RegisterAddress, value: RegisterType(address)) v
     }
 }
 
-pub fn setShadow(self: *Cpu, address: RegisterAddress, value: RegisterType(address)) void {
+pub fn setShadow(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(address)) void {
     switch (address) {
         // 1-bit flags
         .CarryFlag => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).cf = value,

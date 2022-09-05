@@ -1,28 +1,21 @@
 const std = @import("std");
 
-const Sync = @This();
 const CEmuCore = @import("cemucore.zig");
+const Sync = @This();
+const util = @import("util.zig");
 
 const State = packed struct(u32) {
     stopping: bool = false,
     running: bool = false,
     synced: bool = false,
     counter: u29 = 0,
-
-    const Backing = @typeInfo(@This()).Struct.backing_integer.?;
-    pub fn from(value: Backing) @This() {
-        return @bitCast(@This(), value);
-    }
-    pub fn all(self: @This()) Backing {
-        return @bitCast(Backing, self);
-    }
 };
 
 mutex: std.Thread.Mutex = .{},
 synced: std.Thread.Condition = .{},
 wait_synced: std.Thread.Condition = .{},
 wait_run: std.Thread.Condition = .{},
-state: std.atomic.Atomic(State.Backing) = .{ .value = (State{ .running = true, .counter = 1 }).all() },
+state: std.atomic.Atomic(util.Backing(State)) = .{ .value = util.toBacking(State{ .running = true, .counter = 1 }) },
 
 pub fn init(sync: *Sync) !void {
     sync.* = .{};
@@ -40,21 +33,21 @@ fn unlock(sync: *Sync) void {
 }
 
 fn getState(sync: *Sync) State {
-    return State.from(sync.state.load(.Monotonic));
+    return util.fromBacking(State, sync.state.load(.Monotonic));
 }
 fn setState(sync: *Sync, mask: State) State {
-    return State.from(sync.state.fetchOr(mask.all(), .Monotonic));
+    return util.fromBacking(State, sync.state.fetchOr(util.toBacking(mask), .Monotonic));
 }
 fn clearState(sync: *Sync, mask: State) State {
-    return State.from(sync.state.fetchAnd(~mask.all(), .Monotonic));
+    return util.fromBacking(State, sync.state.fetchAnd(~util.toBacking(mask), .Monotonic));
 }
 fn incCounter(sync: *Sync) State {
-    var state = State.from(sync.state.fetchAdd((State{ .counter = 1 }).all(), .Monotonic));
+    var state = util.fromBacking(State, sync.state.fetchAdd(util.toBacking(State{ .counter = 1 }), .Monotonic));
     state.counter += 1;
     return state;
 }
 fn decCounter(sync: *Sync, comptime do_unlock: bool) State {
-    var state = State.from(sync.state.fetchSub((State{ .counter = 1 }).all(), .Monotonic));
+    var state = util.fromBacking(State, sync.state.fetchSub(util.toBacking(State{ .counter = 1 }), .Monotonic));
     state.counter -= 1;
     if (do_unlock) sync.unlock();
     (if (state.counter == 0) sync.synced else sync.wait_synced).signal();
@@ -106,7 +99,7 @@ fn loopUnlikely(sync: *Sync) bool {
     return sync.leaveMask(.{ .stopping = true, .synced = true });
 }
 pub fn loop(sync: *Sync) bool {
-    return State.from(sync.state.load(.Monotonic)).counter == 0 or sync.loopUnlikely();
+    return util.fromBacking(State, sync.state.load(.Monotonic)).counter == 0 or sync.loopUnlikely();
 }
 
 pub fn delay(sync: *Sync, delay_ns: u64) bool {

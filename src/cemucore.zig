@@ -4,6 +4,7 @@ const std = @import("std");
 const Sync = @import("sync.zig");
 const Mem = @import("mem.zig");
 const Cpu = @import("cpu.zig");
+const Keypad = @import("keypad.zig");
 
 pub const options = @import("options");
 
@@ -92,6 +93,7 @@ signal_handler: ?*const fn (*CEmuCore, Signal) void,
 sync: Sync = undefined,
 mem: Mem = undefined,
 cpu: Cpu = undefined,
+keypad: Keypad = undefined,
 thread: ?std.Thread = null,
 
 pub fn create(create_options: CreateOptions) !*CEmuCore {
@@ -110,6 +112,7 @@ pub fn init(self: *CEmuCore, create_options: CreateOptions) !void {
     try self.sync.init();
     try self.mem.init();
     try self.cpu.init();
+    try self.keypad.init();
     switch (create_options.threading) {
         .SingleThreaded => {},
         .MultiThreaded => {
@@ -130,6 +133,7 @@ pub fn init(self: *CEmuCore, create_options: CreateOptions) !void {
 pub fn deinit(self: *CEmuCore) void {
     self.sync.stop();
     if (self.thread) |thread| thread.join();
+    self.keypad.deinit();
     self.cpu.deinit();
     self.mem.deinit();
     self.sync.deinit();
@@ -139,18 +143,11 @@ pub fn destroy(self: *CEmuCore) void {
     self.allocator.destroy(self);
 }
 
-fn property_needs_sync(property: Property) bool {
-    return switch (property) {
-        .Key, .GpioEnable => false,
-        else => true,
-    };
+fn IntTypeForBuffer(buffer: []const u8) type {
+    return std.meta.Int(.unsigned, std.math.min(buffer.len, 3) * 8);
 }
 
-pub fn get(self: *CEmuCore, property: Property, address: u24) ?u24 {
-    const needs_sync = property_needs_sync(property);
-    if (needs_sync) self.sync.enter();
-    defer if (needs_sync) self.sync.leave();
-
+fn getRaw(self: *CEmuCore, property: Property, address: u24) ?u24 {
     return switch (property) {
         .Reg => inline for (@typeInfo(RegisterAddress).Enum.fields) |field| {
             if (address == field.value) {
@@ -162,20 +159,37 @@ pub fn get(self: *CEmuCore, property: Property, address: u24) ?u24 {
                 break self.cpu.getShadow(@field(RegisterAddress, field.name));
             }
         } else unreachable,
+        .Key => self.keypad.getKey(@intCast(u8, address)),
+        .GpioEnable => self.keypad.getGpio(@intCast(u5, address)),
         else => std.debug.todo("unimplemented"),
     };
 }
-pub fn getBuffer(self: *CEmuCore, property: Property, address: u24, buffer: []u8) void {
-    _ = self;
-    _ = property;
-    _ = address;
-    _ = buffer;
-}
-pub fn set(self: *CEmuCore, property: Property, address: u24, value: ?u24) void {
-    const needs_sync = property_needs_sync(property);
+pub fn get(self: *CEmuCore, property: Property, address: u24) ?u24 {
+    const needs_sync = switch (property) {
+        else => true,
+    };
     if (needs_sync) self.sync.enter();
     defer if (needs_sync) self.sync.leave();
 
+    return self.getRaw(property, address);
+}
+pub fn getBuffer(self: *CEmuCore, property: Property, address: u24, buffer: []u8) void {
+    const needs_sync = switch (property) {
+        else => true,
+    };
+    if (needs_sync) self.sync.enter();
+    defer if (needs_sync) self.sync.leave();
+
+    switch (property) {
+        else => if (self.getRaw(property, address)) |value|
+            inline for (.{ 3, 2, 1, 0 }) |len| {
+                const IntType = std.meta.Int(.unsigned, len * 8);
+                if (len <= buffer.len)
+                    break std.mem.writeIntSliceLittle(IntType, buffer, @intCast(IntType, value));
+            } else unreachable,
+    }
+}
+fn setRaw(self: *CEmuCore, property: Property, address: u24, value: ?u24) void {
     switch (property) {
         .Reg => inline for (@typeInfo(RegisterAddress).Enum.fields) |field| {
             if (address == field.value) {
@@ -192,15 +206,38 @@ pub fn set(self: *CEmuCore, property: Property, address: u24, value: ?u24) void 
                 self.cpu.setShadow(register_address, @intCast(register_type, value.?));
                 break;
             }
-        } else unreachable,
+        },
+        .Key => self.keypad.setKey(@intCast(u8, address), @intCast(u1, value.?)),
+        .GpioEnable => self.keypad.setGpio(@intCast(u5, address), @intCast(u1, value.?)),
         else => std.debug.todo("unimplemented"),
     }
 }
+pub fn set(self: *CEmuCore, property: Property, address: u24, value: ?u24) void {
+    const needs_sync = switch (property) {
+        .Key => false,
+        else => true,
+    };
+    if (needs_sync) self.sync.enter();
+    defer if (needs_sync) self.sync.leave();
+    self.setRaw(property, address, value);
+}
 pub fn setBuffer(self: *CEmuCore, property: Property, address: u24, buffer: []const u8) void {
-    _ = self;
-    _ = property;
-    _ = address;
-    _ = buffer;
+    const needs_sync = switch (property) {
+        .Key => false,
+        else => true,
+    };
+    if (needs_sync) self.sync.enter();
+    defer if (needs_sync) self.sync.leave();
+
+    switch (property) {
+        else => {
+            const value = inline for (.{ 3, 2, 1, 0 }) |len| {
+                if (len <= buffer.len)
+                    break std.mem.readIntSliceLittle(std.meta.Int(.unsigned, len * 8), buffer);
+            };
+            self.setRaw(property, address, value);
+        },
+    }
 }
 pub fn doCommand(self: *CEmuCore, arguments: [:null]?[*:0]u8) i32 {
     _ = self;
