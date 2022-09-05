@@ -15,7 +15,7 @@ mutex: std.Thread.Mutex = .{},
 synced: std.Thread.Condition = .{},
 wait_synced: std.Thread.Condition = .{},
 wait_run: std.Thread.Condition = .{},
-state: std.atomic.Atomic(util.Backing(State)) = .{ .value = util.toBacking(State{ .running = true, .counter = 1 }) },
+state: std.atomic.Atomic(util.Backing(State)) = .{ .value = util.toBacking(State{ .counter = 1 }) },
 
 pub fn init(sync: *Sync) !void {
     sync.* = .{};
@@ -73,11 +73,13 @@ fn waitRun(sync: *Sync) State {
 
 fn sleepMask(sync: *Sync, mask: State) State {
     const state = sync.clearState(mask);
-    return if (state.running) sync.incCounter() else state;
+    if (state.running) _ = sync.incCounter();
+    return state;
 }
 fn wakeMask(sync: *Sync, mask: State) State {
     const state = sync.setState(mask);
-    return if (state.running) state else sync.decCounter(false);
+    if (!state.running) _ = sync.decCounter(false);
+    return state;
 }
 
 pub fn leaveMask(sync: *Sync, mask: State) bool {
@@ -139,7 +141,7 @@ pub fn runLeave(sync: *Sync) void {
 }
 
 pub fn start(sync: *Sync) void {
-    sync.leave();
+    sync.unlock();
 }
 pub fn stop(sync: *Sync) void {
     sync.enter();

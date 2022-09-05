@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 __attribute__((__cold__, __noreturn__)) static void
 expect_fail(const char *file, int line, const char *function, const char *condition) {
@@ -113,11 +114,35 @@ static void test_cpu_registers(cemucore_t *core) {
     expect(UINT32_C(0x147AD2) == cemucore_get(core, CEMUCORE_PROP_REG_SHADOW, CEMUCORE_REG_UHL));
 }
 
+static void test_memory(cemucore_t *core) {
+    cemucore_set(core, CEMUCORE_PROP_RAM, 0, 0x42);
+    cemucore_set(core, CEMUCORE_PROP_RAM, 1, 0x24);
+    expect(0x24 == cemucore_get(core, CEMUCORE_PROP_RAM, 1));
+    expect(0x42 == cemucore_get(core, CEMUCORE_PROP_RAM, 0));
+}
+
 int main(int argc, char *argv[]) {
     fprintf(stderr, "Running %s tests.\n", strrchr(argv[0], '/') + 1);
 
     cemucore_t *core = cemucore_create(CEMUCORE_CREATE_FLAG_THREADED, NULL, NULL);
     test_cpu_registers(core);
+
+    test_memory(core);
+
+    cemucore_set(core, CEMUCORE_PROP_RAM, 0, 0x00);
+    cemucore_set(core, CEMUCORE_PROP_RAM, 1, 0x76);
+    cemucore_set(core, CEMUCORE_PROP_RAM, 2, 0x18);
+    cemucore_set(core, CEMUCORE_PROP_RAM, 3, 0xFE);
+    cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_PC, 0);
+    cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_MB, 0xD0);
+
+    expect(!cemucore_sleep(core));
+    expect(cemucore_wake(core));
+    expect(!cemucore_wake(core));
+    sleep(1);
+    expect(cemucore_sleep(core));
+    expect(!cemucore_sleep(core));
+    sleep(1);
 
     cemucore_destroy(core);
     core = NULL;

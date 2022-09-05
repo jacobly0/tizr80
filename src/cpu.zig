@@ -1,9 +1,21 @@
 const std = @import("std");
 
+const CEmuCore = @import("cemucore.zig");
 const Cpu = @This();
+const decode = @import("cpu/decode.zig");
+const Interpreter = @import("cpu/interp.zig");
 const util = @import("util.zig");
 
+pub const Backend = struct {
+    execute: *const fn (*Backend, *CEmuCore) void,
+    destroy: *const fn (*Backend, *std.mem.Allocator) void,
+};
+
 pub const RegisterAddress = enum {
+    // 1-bit state
+    Adl,
+    Madl,
+
     // 1-bit flags
     CarryFlag,
     SubtractFlag,
@@ -56,6 +68,13 @@ pub const RegisterAddress = enum {
     RPC,
 };
 
+const Adl = enum(u1) { z80, ez80 };
+
+const Mode = packed struct(u2) {
+    adl: Adl,
+    madl: Adl,
+};
+
 const Flags = packed struct(u8) {
     cf: u1,
     nf: u1,
@@ -78,7 +97,7 @@ const u8u8u8 = packed struct(u24) {
     upper: u8,
 };
 
-const u8u16 = packed struct(u24) {
+pub const u8u16 = packed struct(u24) {
     short: u16,
     upper: u8,
 };
@@ -111,9 +130,13 @@ pc: u24 = 0,
 r: u8 = 0,
 mbi: u24 = 0,
 
+mode: Mode = .{ .adl = .z80, .madl = .z80 },
+
+backend: *Backend,
+
 pub fn RegisterType(comptime address: RegisterAddress) type {
     return switch (address) {
-        .CarryFlag, .SubtractFlag, .ParityOverflowFlag, .XFlag, .HalfCarryFlag, .YFlag, .ZeroFlag, .SignFlag => u1,
+        .Adl, .Madl, .CarryFlag, .SubtractFlag, .ParityOverflowFlag, .XFlag, .HalfCarryFlag, .YFlag, .ZeroFlag, .SignFlag => u1,
         .F, .A, .C, .B, .BCU, .E, .D, .DEU, .L, .H, .HLU, .IXL, .IXH, .IXU, .IYL, .IYH, .IYU, .R, .MB => u8,
         .AF, .BC, .DE, .HL, .IX, .IY, .SPS, .I => u16,
         .UBC, .UDE, .UHL, .UIX, .UIY, .SPL, .PC, .RPC => u24,
@@ -122,6 +145,10 @@ pub fn RegisterType(comptime address: RegisterAddress) type {
 
 pub fn get(self: *const Cpu, comptime address: RegisterAddress) RegisterType(address) {
     return switch (address) {
+        // 1-bit state
+        .Adl => @enumToInt(self.mode.adl),
+        .Madl => @enumToInt(self.mode.madl),
+
         // 1-bit flags
         .CarryFlag => self.cf,
         .SubtractFlag => self.nf,
@@ -186,6 +213,9 @@ pub fn get(self: *const Cpu, comptime address: RegisterAddress) RegisterType(add
 
 pub fn getShadow(self: *const Cpu, comptime address: RegisterAddress) RegisterType(address) {
     return switch (address) {
+        // 1-bit state
+        .Adl, .Madl => unreachable,
+
         // 1-bit flags
         .CarryFlag => util.fromBacking(Flags, self.getShadow(.F)).cf,
         .SubtractFlag => util.fromBacking(Flags, self.getShadow(.F)).nf,
@@ -227,6 +257,10 @@ pub fn getShadow(self: *const Cpu, comptime address: RegisterAddress) RegisterTy
 
 pub fn set(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(address)) void {
     switch (address) {
+        // 1-bit state
+        .Adl => self.mode.adl = @intToEnum(Adl, value),
+        .Madl => self.mode.madl = @intToEnum(Adl, value),
+
         // 1-bit flags
         .CarryFlag => self.cf = value,
         .SubtractFlag => self.nf = value,
@@ -295,6 +329,9 @@ pub fn set(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(ad
 
 pub fn setShadow(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(address)) void {
     switch (address) {
+        // 1-bit state
+        .Adl, .Madl => unreachable,
+
         // 1-bit flags
         .CarryFlag => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).cf = value,
         .SubtractFlag => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).nf = value,
@@ -431,9 +468,15 @@ test "registers" {
     try std.testing.expectEqual(@as(u24, 0x147AD2), cpu.getShadow(.UHL));
 }
 
-pub fn init(self: *Cpu) !void {
-    self.* = Cpu{};
+pub fn init(self: *Cpu, allocator: *std.mem.Allocator) !void {
+    self.* = Cpu{
+        .backend = try Interpreter.create(allocator),
+    };
 }
-pub fn deinit(self: *Cpu) void {
-    _ = self;
+pub fn deinit(self: *Cpu, allocator: *std.mem.Allocator) void {
+    self.backend.destroy(self.backend, allocator);
+}
+
+pub fn execute(self: *Cpu) void {
+    self.backend.execute(self.backend, @fieldParentPtr(CEmuCore, "cpu", self));
 }

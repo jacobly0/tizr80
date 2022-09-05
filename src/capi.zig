@@ -2,6 +2,8 @@ const std = @import("std");
 
 const CEmuCore = @import("cemucore.zig");
 
+pub const allow_todo_in_release = true;
+
 pub const CEMUCORE_DEBUGGER = CEmuCore.options.debugger;
 
 pub const cemucore_sig = enum(c_int) {
@@ -73,6 +75,10 @@ pub const cemucore_transfer = enum(c_int) {
 };
 
 pub const cemucore_reg = enum(c_int) {
+    // 1-bit state
+    CEMUCORE_STATE_ADL,
+    CEMUCORE_STATE_MADL,
+
     // 1-bit flags
     CEMUCORE_FLAG_C,
     CEMUCORE_FLAG_N,
@@ -276,4 +282,11 @@ export fn cemucore_command(
     command: [*:null]?[*:0]u8,
 ) callconv(.C) c_int {
     return @ptrCast(*CEmuCore, core).doCommand(std.mem.sliceTo(command, null));
+}
+
+export fn cemucore_sleep(core: *cemucore) bool {
+    return @ptrCast(*CEmuCore, core).sleep();
+}
+export fn cemucore_wake(core: *cemucore) bool {
+    return @ptrCast(*CEmuCore, core).wake();
 }

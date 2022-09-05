@@ -2,7 +2,7 @@ const builtin = @import("builtin");
 const std = @import("std");
 
 const Sync = @import("sync.zig");
-const Mem = @import("mem.zig");
+const Memory = @import("memory.zig");
 const Cpu = @import("cpu.zig");
 const Keypad = @import("keypad.zig");
 
@@ -91,7 +91,7 @@ const CEmuCore = @This();
 allocator: std.mem.Allocator,
 signal_handler: ?*const fn (*CEmuCore, Signal) void,
 sync: Sync = undefined,
-mem: Mem = undefined,
+mem: Memory = undefined,
 cpu: Cpu = undefined,
 keypad: Keypad = undefined,
 thread: ?std.Thread = null,
@@ -110,8 +110,8 @@ pub fn init(self: *CEmuCore, create_options: CreateOptions) !void {
         .signal_handler = create_options.signal_handler,
     };
     try self.sync.init();
-    try self.mem.init();
-    try self.cpu.init();
+    try self.mem.init(&self.allocator);
+    try self.cpu.init(&self.allocator);
     try self.keypad.init();
     switch (create_options.threading) {
         .SingleThreaded => {},
@@ -134,8 +134,8 @@ pub fn deinit(self: *CEmuCore) void {
     self.sync.stop();
     if (self.thread) |thread| thread.join();
     self.keypad.deinit();
-    self.cpu.deinit();
-    self.mem.deinit();
+    self.cpu.deinit(&self.allocator);
+    self.mem.deinit(&self.allocator);
     self.sync.deinit();
 }
 pub fn destroy(self: *CEmuCore) void {
@@ -160,6 +160,7 @@ fn getRaw(self: *CEmuCore, property: Property, address: u24) ?u24 {
             }
         } else unreachable,
         .Key => self.keypad.getKey(@intCast(u8, address)),
+        .Ram => self.mem.readByte(Memory.ram_start + @as(u24, @intCast(u19, address))),
         .GpioEnable => self.keypad.getGpio(@intCast(u5, address)),
         else => std.debug.todo("unimplemented"),
     };
@@ -208,6 +209,7 @@ fn setRaw(self: *CEmuCore, property: Property, address: u24, value: ?u24) void {
             }
         },
         .Key => self.keypad.setKey(@intCast(u8, address), @intCast(u1, value.?)),
+        .Ram => self.mem.writeByte(Memory.ram_start + @as(u24, @intCast(u19, address)), @intCast(u8, value.?)),
         .GpioEnable => self.keypad.setGpio(@intCast(u5, address), @intCast(u1, value.?)),
         else => std.debug.todo("unimplemented"),
     }
@@ -248,8 +250,18 @@ pub fn doCommand(self: *CEmuCore, arguments: [:null]?[*:0]u8) i32 {
 pub fn runLoop(self: *CEmuCore) void {
     while (self.sync.loop()) {
         if (!self.sync.delay(std.time.ns_per_s / 10)) break;
+
+        self.cpu.execute();
     } else return;
     std.debug.assert(!self.sync.loop());
+}
+
+pub fn sleep(self: *CEmuCore) bool {
+    return self.sync.sleep();
+}
+
+pub fn wake(self: *CEmuCore) bool {
+    return self.sync.wake();
 }
 
 test "create" {
@@ -263,4 +275,15 @@ test "init" {
 
     try core.init(.{ .allocator = std.testing.allocator });
     defer core.deinit();
+}
+
+test "sleep/wake" {
+    const core = try CEmuCore.create(.{ .allocator = std.testing.allocator });
+    defer core.destroy();
+
+    try std.testing.expect(!core.sleep());
+    try std.testing.expect(core.wake());
+    try std.testing.expect(!core.wake());
+    try std.testing.expect(core.sleep());
+    try std.testing.expect(!core.sleep());
 }
