@@ -90,7 +90,7 @@ const CEmuCore = @This();
 
 allocator: std.mem.Allocator,
 signal_handler: ?*const fn (*CEmuCore, Signal) void,
-sync: Sync = undefined,
+sync: ?Sync = undefined,
 mem: Memory = undefined,
 cpu: Cpu = undefined,
 keypad: Keypad = undefined,
@@ -109,34 +109,36 @@ pub fn init(self: *CEmuCore, create_options: CreateOptions) !void {
         .allocator = create_options.allocator,
         .signal_handler = create_options.signal_handler,
     };
-    try self.sync.init();
+    switch (create_options.threading) {
+        .SingleThreaded => self.sync = null,
+        .MultiThreaded => {
+            std.debug.assert(!builtin.single_threaded);
+            try self.sync.?.init();
+        },
+    }
     try self.mem.init(&self.allocator);
     try self.cpu.init(&self.allocator);
     try self.keypad.init();
-    switch (create_options.threading) {
-        .SingleThreaded => {},
-        .MultiThreaded => {
-            std.debug.assert(!builtin.single_threaded);
-            const thread = try std.Thread.spawn(
-                .{},
-                runLoop,
-                .{self},
-            );
-            const name = "cemucore";
-            thread.setName(name[0..std.math.min(name.len, std.Thread.max_name_len)]) catch {};
-            self.thread = thread;
-        },
+    if (self.sync) |*sync| {
+        const thread = try std.Thread.spawn(
+            .{},
+            runLoop,
+            .{self},
+        );
+        const name = "cemucore";
+        thread.setName(name[0..std.math.min(name.len, std.Thread.max_name_len)]) catch {};
+        self.thread = thread;
+        sync.start();
     }
-    self.sync.start();
 }
 
 pub fn deinit(self: *CEmuCore) void {
-    self.sync.stop();
+    if (self.sync) |*sync| sync.stop();
     if (self.thread) |thread| thread.join();
     self.keypad.deinit();
     self.cpu.deinit(&self.allocator);
     self.mem.deinit(&self.allocator);
-    self.sync.deinit();
+    if (self.sync) |*sync| sync.deinit();
 }
 pub fn destroy(self: *CEmuCore) void {
     self.deinit();
@@ -169,17 +171,17 @@ pub fn get(self: *CEmuCore, property: Property, address: u24) ?u24 {
     const needs_sync = switch (property) {
         else => true,
     };
-    if (needs_sync) self.sync.enter();
-    defer if (needs_sync) self.sync.leave();
+    if (needs_sync) if (self.sync) |*sync| sync.enter();
+    defer if (needs_sync) if (self.sync) |*sync| sync.leave();
 
     return self.getRaw(property, address);
 }
-pub fn getBuffer(self: *CEmuCore, property: Property, address: u24, buffer: []u8) void {
+pub fn getSlice(self: *CEmuCore, property: Property, address: u24, buffer: []u8) void {
     const needs_sync = switch (property) {
         else => true,
     };
-    if (needs_sync) self.sync.enter();
-    defer if (needs_sync) self.sync.leave();
+    if (needs_sync) if (self.sync) |*sync| sync.enter();
+    defer if (needs_sync) if (self.sync) |*sync| sync.leave();
 
     switch (property) {
         else => if (self.getRaw(property, address)) |value|
@@ -219,19 +221,34 @@ pub fn set(self: *CEmuCore, property: Property, address: u24, value: ?u24) void 
         .Key => false,
         else => true,
     };
-    if (needs_sync) self.sync.enter();
-    defer if (needs_sync) self.sync.leave();
+    if (needs_sync) if (self.sync) |*sync| sync.enter();
+    defer if (needs_sync) if (self.sync) |*sync| sync.leave();
+
     self.setRaw(property, address, value);
 }
-pub fn setBuffer(self: *CEmuCore, property: Property, address: u24, buffer: []const u8) void {
+pub fn setSlice(self: *CEmuCore, property: Property, address: u24, buffer: []const u8) void {
     const needs_sync = switch (property) {
         .Key => false,
         else => true,
     };
-    if (needs_sync) self.sync.enter();
-    defer if (needs_sync) self.sync.leave();
+    if (needs_sync) if (self.sync) |*sync| sync.enter();
+    defer if (needs_sync) if (self.sync) |*sync| sync.leave();
 
     switch (property) {
+        .Port => {
+            var offset: usize = 0;
+            while (offset < buffer.len) : (offset += 1) {
+                const current = @truncate(u16, address) +% offset;
+                if (current >= 0x0020 and current < 0x0026)
+                    self.mem.port0[current - 0x0020] = buffer[offset]
+                else if (current >= 0x2010 and current < 0x2050)
+                    self.mem.sha256_data[current - 0x2010] = buffer[offset]
+                else if (current >= 0x4800 and current < 0x4C00)
+                    self.mem.cursor[current - 0x4800] = buffer[offset]
+                else
+                    std.debug.todo("unimplemented");
+            }
+        },
         else => {
             const value = inline for (.{ 3, 2, 1, 0 }) |len| {
                 if (len <= buffer.len)
@@ -241,6 +258,7 @@ pub fn setBuffer(self: *CEmuCore, property: Property, address: u24, buffer: []co
         },
     }
 }
+
 pub fn doCommand(self: *CEmuCore, arguments: [:null]?[*:0]u8) i32 {
     _ = self;
     _ = arguments;
@@ -248,20 +266,20 @@ pub fn doCommand(self: *CEmuCore, arguments: [:null]?[*:0]u8) i32 {
 }
 
 pub fn runLoop(self: *CEmuCore) void {
-    while (self.sync.loop()) {
-        if (!self.sync.delay(std.time.ns_per_s / 10)) break;
+    while (self.sync.?.loop()) {
+        if (!self.sync.?.delay(std.time.ns_per_s / 10)) break;
 
-        self.cpu.execute();
+        self.cpu.step();
     } else return;
-    std.debug.assert(!self.sync.loop());
+    std.debug.assert(!self.sync.?.loop());
 }
 
 pub fn sleep(self: *CEmuCore) bool {
-    return self.sync.sleep();
+    return if (self.sync) |*sync| sync.sleep() else false;
 }
 
 pub fn wake(self: *CEmuCore) bool {
-    return self.sync.wake();
+    return if (self.sync) |*sync| sync.wake() else false;
 }
 
 test "create" {
@@ -286,4 +304,9 @@ test "sleep/wake" {
     try std.testing.expect(!core.wake());
     try std.testing.expect(core.sleep());
     try std.testing.expect(!core.sleep());
+}
+
+test "single threaded" {
+    const core = try CEmuCore.create(.{ .allocator = std.testing.allocator, .threading = .SingleThreaded });
+    defer core.destroy();
 }

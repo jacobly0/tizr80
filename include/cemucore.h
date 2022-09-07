@@ -75,6 +75,7 @@ typedef enum cemucore_reg {
     /* 1-bit state */
     CEMUCORE_STATE_ADL,
     CEMUCORE_STATE_MADL,
+    CEMUCORE_STATE_IEF,
 
     /* 1-bit flags */
     CEMUCORE_FLAG_C,

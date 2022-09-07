@@ -78,6 +78,7 @@ pub const cemucore_reg = enum(c_int) {
     // 1-bit state
     CEMUCORE_STATE_ADL,
     CEMUCORE_STATE_MADL,
+    CEMUCORE_STATE_IEF,
 
     // 1-bit flags
     CEMUCORE_FLAG_C,
@@ -246,7 +247,7 @@ export fn cemucore_get_buffer(
     buf: *anyopaque,
     len: u32,
 ) callconv(.C) void {
-    return @ptrCast(*CEmuCore, core).getBuffer(
+    return @ptrCast(*CEmuCore, core).getSlice(
         @intToEnum(CEmuCore.Property, @enumToInt(prop)),
         std.math.cast(u24, addr) orelse return,
         @ptrCast([*]u8, buf)[0..len],
@@ -271,7 +272,7 @@ export fn cemucore_set_buffer(
     buf: *const anyopaque,
     len: u32,
 ) callconv(.C) void {
-    return @ptrCast(*CEmuCore, core).setBuffer(
+    return @ptrCast(*CEmuCore, core).setSlice(
         @intToEnum(CEmuCore.Property, @enumToInt(prop)),
         std.math.cast(u24, addr) orelse return,
         @ptrCast([*]const u8, buf)[0..len],

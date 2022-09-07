@@ -7,7 +7,7 @@ const Interpreter = @import("cpu/interp.zig");
 const util = @import("util.zig");
 
 pub const Backend = struct {
-    execute: *const fn (*Backend, *CEmuCore) void,
+    step: *const fn (*Backend, *CEmuCore) void,
     destroy: *const fn (*Backend, *std.mem.Allocator) void,
 };
 
@@ -15,6 +15,7 @@ pub const RegisterAddress = enum {
     // 1-bit state
     adl,
     madl,
+    ief,
 
     // 1-bit flags
     cf,
@@ -75,7 +76,7 @@ const Mode = packed struct(u2) {
     madl: Adl,
 };
 
-const Flags = packed struct(u8) {
+pub const Flags = packed struct(u8) {
     cf: u1,
     nf: u1,
     pv: u1,
@@ -132,11 +133,16 @@ mbi: u24 = 0,
 
 mode: Mode = .{ .adl = .z80, .madl = .z80 },
 
+ief1: u1 = 0,
+ief2: u1 = 0,
+
+cycles: u64 = 0,
+
 backend: *Backend,
 
 pub fn RegisterType(comptime address: RegisterAddress) type {
     return switch (address) {
-        .adl, .madl, .cf, .nf, .pv, .xf, .hc, .yf, .zf, .sf => u1,
+        .adl, .madl, .ief, .cf, .nf, .pv, .xf, .hc, .yf, .zf, .sf => u1,
         .f, .a, .c, .b, .bcu, .e, .d, .deu, .l, .h, .hlu, .ixl, .ixh, .ixu, .iyl, .iyh, .iyu, .r, .mb => u8,
         .af, .bc, .de, .hl, .ix, .iy, .sps, .i => u16,
         .ubc, .ude, .uhl, .uix, .uiy, .spl, .pc, .rpc => u24,
@@ -148,6 +154,7 @@ pub fn get(self: *const Cpu, comptime address: RegisterAddress) RegisterType(add
         // 1-bit state
         .adl => @enumToInt(self.mode.adl),
         .madl => @enumToInt(self.mode.madl),
+        .ief => self.ief1,
 
         // 1-bit flags
         .cf => self.cf,
@@ -215,6 +222,7 @@ pub fn getShadow(self: *const Cpu, comptime address: RegisterAddress) RegisterTy
     return switch (address) {
         // 1-bit state
         .adl, .madl => unreachable,
+        .ief => self.ief2,
 
         // 1-bit flags
         .cf => util.fromBacking(Flags, self.getShadow(.f)).cf,
@@ -260,6 +268,10 @@ pub fn set(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(ad
         // 1-bit state
         .adl => self.mode.adl = @intToEnum(Adl, value),
         .madl => self.mode.madl = @intToEnum(Adl, value),
+        .ief => {
+            self.ief1 = value;
+            self.setShadow(.ief, value);
+        },
 
         // 1-bit flags
         .cf => self.cf = value,
@@ -331,6 +343,7 @@ pub fn setShadow(self: *Cpu, comptime address: RegisterAddress, value: RegisterT
     switch (address) {
         // 1-bit state
         .adl, .madl => unreachable,
+        .ief => self.ief2 = value,
 
         // 1-bit flags
         .cf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).cf = value,
@@ -477,6 +490,6 @@ pub fn deinit(self: *Cpu, allocator: *std.mem.Allocator) void {
     self.backend.destroy(self.backend, allocator);
 }
 
-pub fn execute(self: *Cpu) void {
-    self.backend.execute(self.backend, @fieldParentPtr(CEmuCore, "cpu", self));
+pub fn step(self: *Cpu) void {
+    self.backend.step(self.backend, @fieldParentPtr(CEmuCore, "cpu", self));
 }
