@@ -13,59 +13,59 @@ pub const Backend = struct {
 
 pub const RegisterAddress = enum {
     // 1-bit state
-    Adl,
-    Madl,
+    adl,
+    madl,
 
     // 1-bit flags
-    CarryFlag,
-    SubtractFlag,
-    ParityOverflowFlag,
-    XFlag,
-    HalfCarryFlag,
-    YFlag,
-    ZeroFlag,
-    SignFlag,
+    cf,
+    nf,
+    pv,
+    xf,
+    hc,
+    yf,
+    zf,
+    sf,
 
     // 8-bit registers
-    F,
-    A,
-    C,
-    B,
-    BCU,
-    E,
-    D,
-    DEU,
-    L,
-    H,
-    HLU,
-    IXL,
-    IXH,
-    IXU,
-    IYL,
-    IYH,
-    IYU,
-    R,
-    MB,
+    f,
+    a,
+    c,
+    b,
+    bcu,
+    e,
+    d,
+    deu,
+    l,
+    h,
+    hlu,
+    ixl,
+    ixh,
+    ixu,
+    iyl,
+    iyh,
+    iyu,
+    r,
+    mb,
 
     // 16-bit registers
-    AF,
-    BC,
-    DE,
-    HL,
-    IX,
-    IY,
-    SPS,
-    I,
+    af,
+    bc,
+    de,
+    hl,
+    ix,
+    iy,
+    sps,
+    i,
 
     // 24-bit registers
-    UBC,
-    UDE,
-    UHL,
-    UIX,
-    UIY,
-    SPL,
-    PC,
-    RPC,
+    ubc,
+    ude,
+    uhl,
+    uix,
+    uiy,
+    spl,
+    pc,
+    rpc,
 };
 
 const Adl = enum(u1) { z80, ez80 };
@@ -136,336 +136,336 @@ backend: *Backend,
 
 pub fn RegisterType(comptime address: RegisterAddress) type {
     return switch (address) {
-        .Adl, .Madl, .CarryFlag, .SubtractFlag, .ParityOverflowFlag, .XFlag, .HalfCarryFlag, .YFlag, .ZeroFlag, .SignFlag => u1,
-        .F, .A, .C, .B, .BCU, .E, .D, .DEU, .L, .H, .HLU, .IXL, .IXH, .IXU, .IYL, .IYH, .IYU, .R, .MB => u8,
-        .AF, .BC, .DE, .HL, .IX, .IY, .SPS, .I => u16,
-        .UBC, .UDE, .UHL, .UIX, .UIY, .SPL, .PC, .RPC => u24,
+        .adl, .madl, .cf, .nf, .pv, .xf, .hc, .yf, .zf, .sf => u1,
+        .f, .a, .c, .b, .bcu, .e, .d, .deu, .l, .h, .hlu, .ixl, .ixh, .ixu, .iyl, .iyh, .iyu, .r, .mb => u8,
+        .af, .bc, .de, .hl, .ix, .iy, .sps, .i => u16,
+        .ubc, .ude, .uhl, .uix, .uiy, .spl, .pc, .rpc => u24,
     };
 }
 
 pub fn get(self: *const Cpu, comptime address: RegisterAddress) RegisterType(address) {
     return switch (address) {
         // 1-bit state
-        .Adl => @enumToInt(self.mode.adl),
-        .Madl => @enumToInt(self.mode.madl),
+        .adl => @enumToInt(self.mode.adl),
+        .madl => @enumToInt(self.mode.madl),
 
         // 1-bit flags
-        .CarryFlag => self.cf,
-        .SubtractFlag => self.nf,
-        .ParityOverflowFlag => self.pv,
-        .XFlag => self.xf,
-        .HalfCarryFlag => self.hc,
-        .YFlag => self.yf,
-        .ZeroFlag => self.zf,
-        .SignFlag => self.sf,
+        .cf => self.cf,
+        .nf => self.nf,
+        .pv => self.pv,
+        .xf => self.xf,
+        .hc => self.hc,
+        .yf => self.yf,
+        .zf => self.zf,
+        .sf => self.sf,
 
         // 8-bit registers
-        .F => util.toBacking(Flags{
-            .cf = self.get(.CarryFlag),
-            .nf = self.get(.SubtractFlag),
-            .pv = self.get(.ParityOverflowFlag),
-            .xf = self.get(.XFlag),
-            .hc = self.get(.HalfCarryFlag),
-            .yf = self.get(.YFlag),
-            .zf = self.get(.ZeroFlag),
-            .sf = self.get(.SignFlag),
+        .f => util.toBacking(Flags{
+            .cf = self.get(.cf),
+            .nf = self.get(.nf),
+            .pv = self.get(.pv),
+            .xf = self.get(.xf),
+            .hc = self.get(.hc),
+            .yf = self.get(.yf),
+            .zf = self.get(.zf),
+            .sf = self.get(.sf),
         }),
-        .A => self.a,
-        .C => util.fromBacking(u8u8u8, self.get(.UBC)).low,
-        .B => util.fromBacking(u8u8u8, self.get(.UBC)).high,
-        .BCU => util.fromBacking(u8u8u8, self.get(.UBC)).upper,
-        .E => util.fromBacking(u8u8u8, self.get(.UDE)).low,
-        .D => util.fromBacking(u8u8u8, self.get(.UDE)).high,
-        .DEU => util.fromBacking(u8u8u8, self.get(.UDE)).upper,
-        .L => util.fromBacking(u8u8u8, self.get(.UHL)).low,
-        .H => util.fromBacking(u8u8u8, self.get(.UHL)).high,
-        .HLU => util.fromBacking(u8u8u8, self.get(.UHL)).upper,
-        .IXL => util.fromBacking(u8u8u8, self.get(.UIX)).low,
-        .IXH => util.fromBacking(u8u8u8, self.get(.UIX)).high,
-        .IXU => util.fromBacking(u8u8u8, self.get(.UIX)).upper,
-        .IYL => util.fromBacking(u8u8u8, self.get(.UIY)).low,
-        .IYH => util.fromBacking(u8u8u8, self.get(.UIY)).high,
-        .IYU => util.fromBacking(u8u8u8, self.get(.UIY)).upper,
-        .R => std.math.rotr(u8, self.r, 1),
-        .MB => util.fromBacking(u8u8u8, self.mbi).upper,
+        .a => self.a,
+        .c => util.fromBacking(u8u8u8, self.get(.ubc)).low,
+        .b => util.fromBacking(u8u8u8, self.get(.ubc)).high,
+        .bcu => util.fromBacking(u8u8u8, self.get(.ubc)).upper,
+        .e => util.fromBacking(u8u8u8, self.get(.ude)).low,
+        .d => util.fromBacking(u8u8u8, self.get(.ude)).high,
+        .deu => util.fromBacking(u8u8u8, self.get(.ude)).upper,
+        .l => util.fromBacking(u8u8u8, self.get(.uhl)).low,
+        .h => util.fromBacking(u8u8u8, self.get(.uhl)).high,
+        .hlu => util.fromBacking(u8u8u8, self.get(.uhl)).upper,
+        .ixl => util.fromBacking(u8u8u8, self.get(.uix)).low,
+        .ixh => util.fromBacking(u8u8u8, self.get(.uix)).high,
+        .ixu => util.fromBacking(u8u8u8, self.get(.uix)).upper,
+        .iyl => util.fromBacking(u8u8u8, self.get(.uiy)).low,
+        .iyh => util.fromBacking(u8u8u8, self.get(.uiy)).high,
+        .iyu => util.fromBacking(u8u8u8, self.get(.uiy)).upper,
+        .r => std.math.rotr(u8, self.r, 1),
+        .mb => util.fromBacking(u8u8u8, self.mbi).upper,
 
         // 16-bit registers
-        .AF => util.toBacking(u8u8{ .low = self.get(.F), .high = self.get(.A) }),
-        .BC => util.fromBacking(u8u16, self.get(.UBC)).short,
-        .DE => util.fromBacking(u8u16, self.get(.UDE)).short,
-        .HL => util.fromBacking(u8u16, self.get(.UHL)).short,
-        .IX => util.fromBacking(u8u16, self.get(.UIX)).short,
-        .IY => util.fromBacking(u8u16, self.get(.UIY)).short,
-        .SPS => self.sps,
-        .I => util.fromBacking(u8u16, self.mbi).short,
+        .af => util.toBacking(u8u8{ .low = self.get(.f), .high = self.get(.a) }),
+        .bc => util.fromBacking(u8u16, self.get(.ubc)).short,
+        .de => util.fromBacking(u8u16, self.get(.ude)).short,
+        .hl => util.fromBacking(u8u16, self.get(.uhl)).short,
+        .ix => util.fromBacking(u8u16, self.get(.uix)).short,
+        .iy => util.fromBacking(u8u16, self.get(.uiy)).short,
+        .sps => self.sps,
+        .i => util.fromBacking(u8u16, self.mbi).short,
 
         // 24-bit registers
-        .UBC => self.bc,
-        .UDE => self.de,
-        .UHL => self.hl,
-        .UIX => self.ix,
-        .UIY => self.iy,
-        .SPL => self.spl,
-        .PC => self.pc,
-        .RPC => std.debug.todo("unimplemented"),
+        .ubc => self.bc,
+        .ude => self.de,
+        .uhl => self.hl,
+        .uix => self.ix,
+        .uiy => self.iy,
+        .spl => self.spl,
+        .pc => self.pc,
+        .rpc => std.debug.todo("unimplemented"),
     };
 }
 
 pub fn getShadow(self: *const Cpu, comptime address: RegisterAddress) RegisterType(address) {
     return switch (address) {
         // 1-bit state
-        .Adl, .Madl => unreachable,
+        .adl, .madl => unreachable,
 
         // 1-bit flags
-        .CarryFlag => util.fromBacking(Flags, self.getShadow(.F)).cf,
-        .SubtractFlag => util.fromBacking(Flags, self.getShadow(.F)).nf,
-        .ParityOverflowFlag => util.fromBacking(Flags, self.getShadow(.F)).pv,
-        .XFlag => util.fromBacking(Flags, self.getShadow(.F)).xf,
-        .HalfCarryFlag => util.fromBacking(Flags, self.getShadow(.F)).hc,
-        .YFlag => util.fromBacking(Flags, self.getShadow(.F)).yf,
-        .ZeroFlag => util.fromBacking(Flags, self.getShadow(.F)).zf,
-        .SignFlag => util.fromBacking(Flags, self.getShadow(.F)).sf,
+        .cf => util.fromBacking(Flags, self.getShadow(.f)).cf,
+        .nf => util.fromBacking(Flags, self.getShadow(.f)).nf,
+        .pv => util.fromBacking(Flags, self.getShadow(.f)).pv,
+        .xf => util.fromBacking(Flags, self.getShadow(.f)).xf,
+        .hc => util.fromBacking(Flags, self.getShadow(.f)).hc,
+        .yf => util.fromBacking(Flags, self.getShadow(.f)).yf,
+        .zf => util.fromBacking(Flags, self.getShadow(.f)).zf,
+        .sf => util.fromBacking(Flags, self.getShadow(.f)).sf,
 
         // 8-bit registers
-        .F => util.fromBacking(u8u8, self.getShadow(.AF)).low,
-        .A => util.fromBacking(u8u8, self.getShadow(.AF)).high,
-        .C => util.fromBacking(u8u8u8, self.getShadow(.UBC)).low,
-        .B => util.fromBacking(u8u8u8, self.getShadow(.UBC)).high,
-        .BCU => util.fromBacking(u8u8u8, self.getShadow(.UBC)).upper,
-        .E => util.fromBacking(u8u8u8, self.getShadow(.UDE)).low,
-        .D => util.fromBacking(u8u8u8, self.getShadow(.UDE)).high,
-        .DEU => util.fromBacking(u8u8u8, self.getShadow(.UDE)).upper,
-        .L => util.fromBacking(u8u8u8, self.getShadow(.UHL)).low,
-        .H => util.fromBacking(u8u8u8, self.getShadow(.UHL)).high,
-        .HLU => util.fromBacking(u8u8u8, self.getShadow(.UHL)).upper,
-        .IXL, .IXH, .IXU, .IYU, .IYL, .IYH, .R, .MB => unreachable,
+        .f => util.fromBacking(u8u8, self.getShadow(.af)).low,
+        .a => util.fromBacking(u8u8, self.getShadow(.af)).high,
+        .c => util.fromBacking(u8u8u8, self.getShadow(.ubc)).low,
+        .b => util.fromBacking(u8u8u8, self.getShadow(.ubc)).high,
+        .bcu => util.fromBacking(u8u8u8, self.getShadow(.ubc)).upper,
+        .e => util.fromBacking(u8u8u8, self.getShadow(.ude)).low,
+        .d => util.fromBacking(u8u8u8, self.getShadow(.ude)).high,
+        .deu => util.fromBacking(u8u8u8, self.getShadow(.ude)).upper,
+        .l => util.fromBacking(u8u8u8, self.getShadow(.uhl)).low,
+        .h => util.fromBacking(u8u8u8, self.getShadow(.uhl)).high,
+        .hlu => util.fromBacking(u8u8u8, self.getShadow(.uhl)).upper,
+        .ixl, .ixh, .ixu, .iyu, .iyl, .iyh, .r, .mb => unreachable,
 
         // 16-bit registers
-        .AF => self.@"af'",
-        .BC => util.fromBacking(u8u16, self.getShadow(.UBC)).short,
-        .DE => util.fromBacking(u8u16, self.getShadow(.UDE)).short,
-        .HL => util.fromBacking(u8u16, self.getShadow(.UHL)).short,
-        .IX, .IY, .SPS, .I => unreachable,
+        .af => self.@"af'",
+        .bc => util.fromBacking(u8u16, self.getShadow(.ubc)).short,
+        .de => util.fromBacking(u8u16, self.getShadow(.ude)).short,
+        .hl => util.fromBacking(u8u16, self.getShadow(.uhl)).short,
+        .ix, .iy, .sps, .i => unreachable,
 
         // 24-bit registers
-        .UBC => self.@"bc'",
-        .UDE => self.@"de'",
-        .UHL => self.@"hl'",
-        .UIX, .UIY, .SPL, .PC, .RPC => unreachable,
+        .ubc => self.@"bc'",
+        .ude => self.@"de'",
+        .uhl => self.@"hl'",
+        .uix, .uiy, .spl, .pc, .rpc => unreachable,
     };
 }
 
 pub fn set(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(address)) void {
     switch (address) {
         // 1-bit state
-        .Adl => self.mode.adl = @intToEnum(Adl, value),
-        .Madl => self.mode.madl = @intToEnum(Adl, value),
+        .adl => self.mode.adl = @intToEnum(Adl, value),
+        .madl => self.mode.madl = @intToEnum(Adl, value),
 
         // 1-bit flags
-        .CarryFlag => self.cf = value,
-        .SubtractFlag => self.nf = value,
-        .ParityOverflowFlag => self.pv = value,
-        .XFlag => self.xf = value,
-        .HalfCarryFlag => self.hc = value,
-        .YFlag => self.yf = value,
-        .ZeroFlag => self.zf = value,
-        .SignFlag => self.sf = value,
+        .cf => self.cf = value,
+        .nf => self.nf = value,
+        .pv => self.pv = value,
+        .xf => self.xf = value,
+        .hc => self.hc = value,
+        .yf => self.yf = value,
+        .zf => self.zf = value,
+        .sf => self.sf = value,
 
         // 8-bit registers
-        .F => {
+        .f => {
             const flags = util.fromBacking(Flags, value);
-            self.set(.CarryFlag, flags.cf);
-            self.set(.SubtractFlag, flags.nf);
-            self.set(.ParityOverflowFlag, flags.pv);
-            self.set(.XFlag, flags.xf);
-            self.set(.HalfCarryFlag, flags.hc);
-            self.set(.YFlag, flags.yf);
-            self.set(.ZeroFlag, flags.zf);
-            self.set(.SignFlag, flags.sf);
+            self.set(.cf, flags.cf);
+            self.set(.nf, flags.nf);
+            self.set(.pv, flags.pv);
+            self.set(.xf, flags.xf);
+            self.set(.hc, flags.hc);
+            self.set(.yf, flags.yf);
+            self.set(.zf, flags.zf);
+            self.set(.sf, flags.sf);
         },
-        .A => self.a = value,
-        .C => @ptrCast(*u8u8u8, &self.bc).low = value,
-        .B => @ptrCast(*u8u8u8, &self.bc).high = value,
-        .BCU => @ptrCast(*u8u8u8, &self.bc).upper = value,
-        .E => @ptrCast(*u8u8u8, &self.de).low = value,
-        .D => @ptrCast(*u8u8u8, &self.de).high = value,
-        .DEU => @ptrCast(*u8u8u8, &self.de).upper = value,
-        .L => @ptrCast(*u8u8u8, &self.hl).low = value,
-        .H => @ptrCast(*u8u8u8, &self.hl).high = value,
-        .HLU => @ptrCast(*u8u8u8, &self.hl).upper = value,
-        .IXL => @ptrCast(*u8u8u8, &self.ix).low = value,
-        .IXH => @ptrCast(*u8u8u8, &self.ix).high = value,
-        .IXU => @ptrCast(*u8u8u8, &self.ix).upper = value,
-        .IYL => @ptrCast(*u8u8u8, &self.iy).low = value,
-        .IYH => @ptrCast(*u8u8u8, &self.iy).high = value,
-        .IYU => @ptrCast(*u8u8u8, &self.iy).upper = value,
-        .R => self.r = std.math.rotl(u8, value, 1),
-        .MB => @ptrCast(*u8u16, &self.mbi).upper = value,
+        .a => self.a = value,
+        .c => @ptrCast(*u8u8u8, &self.bc).low = value,
+        .b => @ptrCast(*u8u8u8, &self.bc).high = value,
+        .bcu => @ptrCast(*u8u8u8, &self.bc).upper = value,
+        .e => @ptrCast(*u8u8u8, &self.de).low = value,
+        .d => @ptrCast(*u8u8u8, &self.de).high = value,
+        .deu => @ptrCast(*u8u8u8, &self.de).upper = value,
+        .l => @ptrCast(*u8u8u8, &self.hl).low = value,
+        .h => @ptrCast(*u8u8u8, &self.hl).high = value,
+        .hlu => @ptrCast(*u8u8u8, &self.hl).upper = value,
+        .ixl => @ptrCast(*u8u8u8, &self.ix).low = value,
+        .ixh => @ptrCast(*u8u8u8, &self.ix).high = value,
+        .ixu => @ptrCast(*u8u8u8, &self.ix).upper = value,
+        .iyl => @ptrCast(*u8u8u8, &self.iy).low = value,
+        .iyh => @ptrCast(*u8u8u8, &self.iy).high = value,
+        .iyu => @ptrCast(*u8u8u8, &self.iy).upper = value,
+        .r => self.r = std.math.rotl(u8, value, 1),
+        .mb => @ptrCast(*u8u16, &self.mbi).upper = value,
 
         // 16-bit registers
-        .AF => {
-            self.set(.F, util.fromBacking(u8u8, value).low);
-            self.set(.A, util.fromBacking(u8u8, value).high);
+        .af => {
+            self.set(.f, util.fromBacking(u8u8, value).low);
+            self.set(.a, util.fromBacking(u8u8, value).high);
         },
-        .BC => @ptrCast(*u8u16, &self.bc).short = value,
-        .DE => @ptrCast(*u8u16, &self.de).short = value,
-        .HL => @ptrCast(*u8u16, &self.hl).short = value,
-        .IX => @ptrCast(*u8u16, &self.ix).short = value,
-        .IY => @ptrCast(*u8u16, &self.iy).short = value,
-        .SPS => self.sps = value,
-        .I => @ptrCast(*u8u16, &self.mbi).short = value,
+        .bc => @ptrCast(*u8u16, &self.bc).short = value,
+        .de => @ptrCast(*u8u16, &self.de).short = value,
+        .hl => @ptrCast(*u8u16, &self.hl).short = value,
+        .ix => @ptrCast(*u8u16, &self.ix).short = value,
+        .iy => @ptrCast(*u8u16, &self.iy).short = value,
+        .sps => self.sps = value,
+        .i => @ptrCast(*u8u16, &self.mbi).short = value,
 
         // 24-bit registers
-        .UBC => self.bc = value,
-        .UDE => self.de = value,
-        .UHL => self.hl = value,
-        .UIX => self.ix = value,
-        .UIY => self.iy = value,
-        .SPL => self.spl = value,
-        .PC => self.pc = value,
-        .RPC => std.debug.todo("unimplemented"),
+        .ubc => self.bc = value,
+        .ude => self.de = value,
+        .uhl => self.hl = value,
+        .uix => self.ix = value,
+        .uiy => self.iy = value,
+        .spl => self.spl = value,
+        .pc => self.pc = value,
+        .rpc => std.debug.todo("unimplemented"),
     }
 }
 
 pub fn setShadow(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(address)) void {
     switch (address) {
         // 1-bit state
-        .Adl, .Madl => unreachable,
+        .adl, .madl => unreachable,
 
         // 1-bit flags
-        .CarryFlag => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).cf = value,
-        .SubtractFlag => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).nf = value,
-        .ParityOverflowFlag => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).pv = value,
-        .XFlag => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).xf = value,
-        .HalfCarryFlag => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).hc = value,
-        .YFlag => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).yf = value,
-        .ZeroFlag => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).zf = value,
-        .SignFlag => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).sf = value,
+        .cf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).cf = value,
+        .nf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).nf = value,
+        .pv => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).pv = value,
+        .xf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).xf = value,
+        .hc => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).hc = value,
+        .yf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).yf = value,
+        .zf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).zf = value,
+        .sf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).sf = value,
 
         // 8-bit registers
-        .F => @ptrCast(*u8u8, &self.@"af'").low = value,
-        .A => @ptrCast(*u8u8, &self.@"af'").high = value,
-        .C => @ptrCast(*u8u8u8, &self.@"bc'").low = value,
-        .B => @ptrCast(*u8u8u8, &self.@"bc'").high = value,
-        .BCU => @ptrCast(*u8u8u8, &self.@"bc'").upper = value,
-        .E => @ptrCast(*u8u8u8, &self.@"de'").low = value,
-        .D => @ptrCast(*u8u8u8, &self.@"de'").high = value,
-        .DEU => @ptrCast(*u8u8u8, &self.@"de'").upper = value,
-        .L => @ptrCast(*u8u8u8, &self.@"hl'").low = value,
-        .H => @ptrCast(*u8u8u8, &self.@"hl'").high = value,
-        .HLU => @ptrCast(*u8u8u8, &self.@"hl'").upper = value,
-        .IXL, .IXH, .IXU, .IYU, .IYL, .IYH, .R, .MB => unreachable,
+        .f => @ptrCast(*u8u8, &self.@"af'").low = value,
+        .a => @ptrCast(*u8u8, &self.@"af'").high = value,
+        .c => @ptrCast(*u8u8u8, &self.@"bc'").low = value,
+        .b => @ptrCast(*u8u8u8, &self.@"bc'").high = value,
+        .bcu => @ptrCast(*u8u8u8, &self.@"bc'").upper = value,
+        .e => @ptrCast(*u8u8u8, &self.@"de'").low = value,
+        .d => @ptrCast(*u8u8u8, &self.@"de'").high = value,
+        .deu => @ptrCast(*u8u8u8, &self.@"de'").upper = value,
+        .l => @ptrCast(*u8u8u8, &self.@"hl'").low = value,
+        .h => @ptrCast(*u8u8u8, &self.@"hl'").high = value,
+        .hlu => @ptrCast(*u8u8u8, &self.@"hl'").upper = value,
+        .ixl, .ixh, .ixu, .iyu, .iyl, .iyh, .r, .mb => unreachable,
 
         // 16-bit registers
-        .AF => self.@"af'" = value,
-        .BC => @ptrCast(*u8u16, &self.@"bc'").short = value,
-        .DE => @ptrCast(*u8u16, &self.@"de'").short = value,
-        .HL => @ptrCast(*u8u16, &self.@"hl'").short = value,
-        .IX, .IY, .SPS, .I => unreachable,
+        .af => self.@"af'" = value,
+        .bc => @ptrCast(*u8u16, &self.@"bc'").short = value,
+        .de => @ptrCast(*u8u16, &self.@"de'").short = value,
+        .hl => @ptrCast(*u8u16, &self.@"hl'").short = value,
+        .ix, .iy, .sps, .i => unreachable,
 
         // 24-bit registers
-        .UBC => self.@"bc'" = value,
-        .UDE => self.@"de'" = value,
-        .UHL => self.@"hl'" = value,
-        .UIX, .UIY, .SPL, .PC, .RPC => unreachable,
+        .ubc => self.@"bc'" = value,
+        .ude => self.@"de'" = value,
+        .uhl => self.@"hl'" = value,
+        .uix, .uiy, .spl, .pc, .rpc => unreachable,
     }
 }
 
 test "registers" {
     var cpu: Cpu = undefined;
 
-    cpu.set(.AF, 0x0123);
-    cpu.set(.UBC, 0x456789);
-    cpu.set(.UDE, 0xABCDEF);
-    cpu.set(.UHL, 0x02468A);
-    cpu.setShadow(.AF, 0xCE13);
-    cpu.setShadow(.UBC, 0x579ACE);
-    cpu.setShadow(.UDE, 0x0369CF);
-    cpu.setShadow(.UHL, 0x147AD2);
-    cpu.set(.UIX, 0x58BE04);
-    cpu.set(.UIY, 0x8C159D);
-    cpu.set(.SPS, 0x26AE);
-    cpu.set(.SPL, 0x37BF05);
-    cpu.set(.PC, 0xAF16B2);
-    cpu.set(.I, 0x7C38);
-    cpu.set(.R, 0xD4);
-    cpu.set(.MB, 0x9E);
+    cpu.set(.af, 0x0123);
+    cpu.set(.ubc, 0x456789);
+    cpu.set(.ude, 0xABCDEF);
+    cpu.set(.uhl, 0x02468A);
+    cpu.setShadow(.af, 0xCE13);
+    cpu.setShadow(.ubc, 0x579ACE);
+    cpu.setShadow(.ude, 0x0369CF);
+    cpu.setShadow(.uhl, 0x147AD2);
+    cpu.set(.uix, 0x58BE04);
+    cpu.set(.uiy, 0x8C159D);
+    cpu.set(.sps, 0x26AE);
+    cpu.set(.spl, 0x37BF05);
+    cpu.set(.pc, 0xAF16B2);
+    cpu.set(.i, 0x7C38);
+    cpu.set(.r, 0xD4);
+    cpu.set(.mb, 0x9E);
 
-    try std.testing.expectEqual(@as(u1, 1), cpu.get(.CarryFlag));
-    try std.testing.expectEqual(@as(u1, 1), cpu.get(.SubtractFlag));
-    try std.testing.expectEqual(@as(u1, 0), cpu.get(.ParityOverflowFlag));
-    try std.testing.expectEqual(@as(u1, 0), cpu.get(.XFlag));
-    try std.testing.expectEqual(@as(u1, 0), cpu.get(.HalfCarryFlag));
-    try std.testing.expectEqual(@as(u1, 1), cpu.get(.YFlag));
-    try std.testing.expectEqual(@as(u1, 0), cpu.get(.ZeroFlag));
-    try std.testing.expectEqual(@as(u1, 0), cpu.get(.SignFlag));
+    try std.testing.expectEqual(@as(u1, 1), cpu.get(.cf));
+    try std.testing.expectEqual(@as(u1, 1), cpu.get(.nf));
+    try std.testing.expectEqual(@as(u1, 0), cpu.get(.pv));
+    try std.testing.expectEqual(@as(u1, 0), cpu.get(.xf));
+    try std.testing.expectEqual(@as(u1, 0), cpu.get(.hc));
+    try std.testing.expectEqual(@as(u1, 1), cpu.get(.yf));
+    try std.testing.expectEqual(@as(u1, 0), cpu.get(.zf));
+    try std.testing.expectEqual(@as(u1, 0), cpu.get(.sf));
 
-    try std.testing.expectEqual(@as(u1, 1), cpu.getShadow(.CarryFlag));
-    try std.testing.expectEqual(@as(u1, 1), cpu.getShadow(.SubtractFlag));
-    try std.testing.expectEqual(@as(u1, 0), cpu.getShadow(.ParityOverflowFlag));
-    try std.testing.expectEqual(@as(u1, 0), cpu.getShadow(.XFlag));
-    try std.testing.expectEqual(@as(u1, 1), cpu.getShadow(.HalfCarryFlag));
-    try std.testing.expectEqual(@as(u1, 0), cpu.getShadow(.YFlag));
-    try std.testing.expectEqual(@as(u1, 0), cpu.getShadow(.ZeroFlag));
-    try std.testing.expectEqual(@as(u1, 0), cpu.getShadow(.SignFlag));
+    try std.testing.expectEqual(@as(u1, 1), cpu.getShadow(.cf));
+    try std.testing.expectEqual(@as(u1, 1), cpu.getShadow(.nf));
+    try std.testing.expectEqual(@as(u1, 0), cpu.getShadow(.pv));
+    try std.testing.expectEqual(@as(u1, 0), cpu.getShadow(.xf));
+    try std.testing.expectEqual(@as(u1, 1), cpu.getShadow(.hc));
+    try std.testing.expectEqual(@as(u1, 0), cpu.getShadow(.yf));
+    try std.testing.expectEqual(@as(u1, 0), cpu.getShadow(.zf));
+    try std.testing.expectEqual(@as(u1, 0), cpu.getShadow(.sf));
 
-    try std.testing.expectEqual(@as(u8, 0x23), cpu.get(.F));
-    try std.testing.expectEqual(@as(u8, 0x01), cpu.get(.A));
-    try std.testing.expectEqual(@as(u8, 0x89), cpu.get(.C));
-    try std.testing.expectEqual(@as(u8, 0x67), cpu.get(.B));
-    try std.testing.expectEqual(@as(u8, 0x45), cpu.get(.BCU));
-    try std.testing.expectEqual(@as(u8, 0xEF), cpu.get(.E));
-    try std.testing.expectEqual(@as(u8, 0xCD), cpu.get(.D));
-    try std.testing.expectEqual(@as(u8, 0xAB), cpu.get(.DEU));
-    try std.testing.expectEqual(@as(u8, 0x8A), cpu.get(.L));
-    try std.testing.expectEqual(@as(u8, 0x46), cpu.get(.H));
-    try std.testing.expectEqual(@as(u8, 0x02), cpu.get(.HLU));
-    try std.testing.expectEqual(@as(u8, 0x04), cpu.get(.IXL));
-    try std.testing.expectEqual(@as(u8, 0xBE), cpu.get(.IXH));
-    try std.testing.expectEqual(@as(u8, 0x58), cpu.get(.IXU));
-    try std.testing.expectEqual(@as(u8, 0x9D), cpu.get(.IYL));
-    try std.testing.expectEqual(@as(u8, 0x15), cpu.get(.IYH));
-    try std.testing.expectEqual(@as(u8, 0x8C), cpu.get(.IYU));
-    try std.testing.expectEqual(@as(u8, 0xD4), cpu.get(.R));
-    try std.testing.expectEqual(@as(u8, 0x9E), cpu.get(.MB));
+    try std.testing.expectEqual(@as(u8, 0x23), cpu.get(.f));
+    try std.testing.expectEqual(@as(u8, 0x01), cpu.get(.a));
+    try std.testing.expectEqual(@as(u8, 0x89), cpu.get(.c));
+    try std.testing.expectEqual(@as(u8, 0x67), cpu.get(.b));
+    try std.testing.expectEqual(@as(u8, 0x45), cpu.get(.bcu));
+    try std.testing.expectEqual(@as(u8, 0xEF), cpu.get(.e));
+    try std.testing.expectEqual(@as(u8, 0xCD), cpu.get(.d));
+    try std.testing.expectEqual(@as(u8, 0xAB), cpu.get(.deu));
+    try std.testing.expectEqual(@as(u8, 0x8A), cpu.get(.l));
+    try std.testing.expectEqual(@as(u8, 0x46), cpu.get(.h));
+    try std.testing.expectEqual(@as(u8, 0x02), cpu.get(.hlu));
+    try std.testing.expectEqual(@as(u8, 0x04), cpu.get(.ixl));
+    try std.testing.expectEqual(@as(u8, 0xBE), cpu.get(.ixh));
+    try std.testing.expectEqual(@as(u8, 0x58), cpu.get(.ixu));
+    try std.testing.expectEqual(@as(u8, 0x9D), cpu.get(.iyl));
+    try std.testing.expectEqual(@as(u8, 0x15), cpu.get(.iyh));
+    try std.testing.expectEqual(@as(u8, 0x8C), cpu.get(.iyu));
+    try std.testing.expectEqual(@as(u8, 0xD4), cpu.get(.r));
+    try std.testing.expectEqual(@as(u8, 0x9E), cpu.get(.mb));
 
-    try std.testing.expectEqual(@as(u8, 0x13), cpu.getShadow(.F));
-    try std.testing.expectEqual(@as(u8, 0xCE), cpu.getShadow(.A));
-    try std.testing.expectEqual(@as(u8, 0xCE), cpu.getShadow(.C));
-    try std.testing.expectEqual(@as(u8, 0x9A), cpu.getShadow(.B));
-    try std.testing.expectEqual(@as(u8, 0x57), cpu.getShadow(.BCU));
-    try std.testing.expectEqual(@as(u8, 0xCF), cpu.getShadow(.E));
-    try std.testing.expectEqual(@as(u8, 0x69), cpu.getShadow(.D));
-    try std.testing.expectEqual(@as(u8, 0x03), cpu.getShadow(.DEU));
-    try std.testing.expectEqual(@as(u8, 0xD2), cpu.getShadow(.L));
-    try std.testing.expectEqual(@as(u8, 0x7A), cpu.getShadow(.H));
-    try std.testing.expectEqual(@as(u8, 0x14), cpu.getShadow(.HLU));
+    try std.testing.expectEqual(@as(u8, 0x13), cpu.getShadow(.f));
+    try std.testing.expectEqual(@as(u8, 0xCE), cpu.getShadow(.a));
+    try std.testing.expectEqual(@as(u8, 0xCE), cpu.getShadow(.c));
+    try std.testing.expectEqual(@as(u8, 0x9A), cpu.getShadow(.b));
+    try std.testing.expectEqual(@as(u8, 0x57), cpu.getShadow(.bcu));
+    try std.testing.expectEqual(@as(u8, 0xCF), cpu.getShadow(.e));
+    try std.testing.expectEqual(@as(u8, 0x69), cpu.getShadow(.d));
+    try std.testing.expectEqual(@as(u8, 0x03), cpu.getShadow(.deu));
+    try std.testing.expectEqual(@as(u8, 0xD2), cpu.getShadow(.l));
+    try std.testing.expectEqual(@as(u8, 0x7A), cpu.getShadow(.h));
+    try std.testing.expectEqual(@as(u8, 0x14), cpu.getShadow(.hlu));
 
-    try std.testing.expectEqual(@as(u16, 0x0123), cpu.get(.AF));
-    try std.testing.expectEqual(@as(u16, 0x6789), cpu.get(.BC));
-    try std.testing.expectEqual(@as(u16, 0xCDEF), cpu.get(.DE));
-    try std.testing.expectEqual(@as(u16, 0x468A), cpu.get(.HL));
-    try std.testing.expectEqual(@as(u16, 0xBE04), cpu.get(.IX));
-    try std.testing.expectEqual(@as(u16, 0x159D), cpu.get(.IY));
-    try std.testing.expectEqual(@as(u16, 0x26AE), cpu.get(.SPS));
-    try std.testing.expectEqual(@as(u16, 0x7C38), cpu.get(.I));
+    try std.testing.expectEqual(@as(u16, 0x0123), cpu.get(.af));
+    try std.testing.expectEqual(@as(u16, 0x6789), cpu.get(.bc));
+    try std.testing.expectEqual(@as(u16, 0xCDEF), cpu.get(.de));
+    try std.testing.expectEqual(@as(u16, 0x468A), cpu.get(.hl));
+    try std.testing.expectEqual(@as(u16, 0xBE04), cpu.get(.ix));
+    try std.testing.expectEqual(@as(u16, 0x159D), cpu.get(.iy));
+    try std.testing.expectEqual(@as(u16, 0x26AE), cpu.get(.sps));
+    try std.testing.expectEqual(@as(u16, 0x7C38), cpu.get(.i));
 
-    try std.testing.expectEqual(@as(u16, 0xCE13), cpu.getShadow(.AF));
-    try std.testing.expectEqual(@as(u16, 0x9ACE), cpu.getShadow(.BC));
-    try std.testing.expectEqual(@as(u16, 0x69CF), cpu.getShadow(.DE));
-    try std.testing.expectEqual(@as(u16, 0x7AD2), cpu.getShadow(.HL));
+    try std.testing.expectEqual(@as(u16, 0xCE13), cpu.getShadow(.af));
+    try std.testing.expectEqual(@as(u16, 0x9ACE), cpu.getShadow(.bc));
+    try std.testing.expectEqual(@as(u16, 0x69CF), cpu.getShadow(.de));
+    try std.testing.expectEqual(@as(u16, 0x7AD2), cpu.getShadow(.hl));
 
-    try std.testing.expectEqual(@as(u24, 0x456789), cpu.get(.UBC));
-    try std.testing.expectEqual(@as(u24, 0xABCDEF), cpu.get(.UDE));
-    try std.testing.expectEqual(@as(u24, 0x02468A), cpu.get(.UHL));
-    try std.testing.expectEqual(@as(u24, 0x58BE04), cpu.get(.UIX));
-    try std.testing.expectEqual(@as(u24, 0x8C159D), cpu.get(.UIY));
-    try std.testing.expectEqual(@as(u24, 0x37BF05), cpu.get(.SPL));
-    try std.testing.expectEqual(@as(u24, 0xAF16B2), cpu.get(.PC));
+    try std.testing.expectEqual(@as(u24, 0x456789), cpu.get(.ubc));
+    try std.testing.expectEqual(@as(u24, 0xABCDEF), cpu.get(.ude));
+    try std.testing.expectEqual(@as(u24, 0x02468A), cpu.get(.uhl));
+    try std.testing.expectEqual(@as(u24, 0x58BE04), cpu.get(.uix));
+    try std.testing.expectEqual(@as(u24, 0x8C159D), cpu.get(.uiy));
+    try std.testing.expectEqual(@as(u24, 0x37BF05), cpu.get(.spl));
+    try std.testing.expectEqual(@as(u24, 0xAF16B2), cpu.get(.pc));
 
-    try std.testing.expectEqual(@as(u24, 0x579ACE), cpu.getShadow(.UBC));
-    try std.testing.expectEqual(@as(u24, 0x0369CF), cpu.getShadow(.UDE));
-    try std.testing.expectEqual(@as(u24, 0x147AD2), cpu.getShadow(.UHL));
+    try std.testing.expectEqual(@as(u24, 0x579ACE), cpu.getShadow(.ubc));
+    try std.testing.expectEqual(@as(u24, 0x0369CF), cpu.getShadow(.ude));
+    try std.testing.expectEqual(@as(u24, 0x147AD2), cpu.getShadow(.uhl));
 }
 
 pub fn init(self: *Cpu, allocator: *std.mem.Allocator) !void {

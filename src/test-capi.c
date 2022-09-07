@@ -129,10 +129,9 @@ int main(int argc, char *argv[]) {
 
     test_memory(core);
 
-    cemucore_set(core, CEMUCORE_PROP_RAM, 0, 0x00);
-    cemucore_set(core, CEMUCORE_PROP_RAM, 1, 0x76);
-    cemucore_set(core, CEMUCORE_PROP_RAM, 2, 0x18);
-    cemucore_set(core, CEMUCORE_PROP_RAM, 3, 0xFE);
+    uint8_t program[] = {0x00, 0x41, 0x53, 0x69, 0x7B, 0x76, 0x18, -2};
+    for (uint32_t address = 0; address != sizeof(program); ++address)
+        cemucore_set(core, CEMUCORE_PROP_RAM, address, program[address]);
     cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_PC, 0);
     cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_MB, 0xD0);
 

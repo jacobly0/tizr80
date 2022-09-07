@@ -35,6 +35,29 @@ fn execute(backend: *Cpu.Backend, core: *CEmuCore) void {
     if (self.halted) return std.debug.print("Doing nothing, halted!\n", .{});
     var state = State{ .interp = self, .core = core, .temp = undefined };
     decode(&state);
+    std.debug.print(
+        \\AF {X:0>4}     {X:0>4} AF'
+        \\BC {X:0>6} {X:0>6} BC'
+        \\DE {X:0>6} {X:0>6} DE'
+        \\HL {X:0>6} {X:0>6} HL'
+        \\IX {X:0>6} {X:0>6} IY
+        \\PC {X:0>6} {X:0>2}
+        \\
+        \\
+    , .{
+        core.cpu.get(.af),
+        core.cpu.getShadow(.af),
+        core.cpu.get(.ubc),
+        core.cpu.getShadow(.ubc),
+        core.cpu.get(.ude),
+        core.cpu.getShadow(.ude),
+        core.cpu.get(.uhl),
+        core.cpu.getShadow(.uhl),
+        core.cpu.get(.uix),
+        core.cpu.get(.uiy),
+        core.cpu.get(.pc),
+        self.prefetch,
+    });
 }
 
 const State = struct {
@@ -44,18 +67,17 @@ const State = struct {
 
     pub fn fetchByte(self: *State) void {
         const pc = switch (self.core.cpu.mode.adl) {
-            .z80 => util.toBacking(Cpu.u8u16{ .short = @truncate(u16, self.core.cpu.get(.PC)), .upper = self.core.cpu.get(.MB) }),
-            .ez80 => self.core.cpu.get(.PC),
+            .z80 => util.toBacking(Cpu.u8u16{ .short = @truncate(u16, self.core.cpu.get(.pc)), .upper = self.core.cpu.get(.mb) }),
+            .ez80 => self.core.cpu.get(.pc),
         };
         self.temp = self.interp.prefetch;
         self.interp.prefetch = self.core.mem.readByte(pc);
-        std.debug.print("Fetching 0x{X:0>2} from 0x{X:0>6}\n", .{ self.interp.prefetch, pc });
     }
 
     pub fn addPC(self: *State, comptime increment: comptime_int) void {
-        self.core.cpu.set(.PC, switch (self.core.cpu.mode.adl) {
-            .z80 => util.toBacking(Cpu.u8u16{ .short = @truncate(u16, self.core.cpu.get(.PC)) +% increment, .upper = self.core.cpu.get(.MB) }),
-            .ez80 => self.core.cpu.get(.PC) +% increment,
+        self.core.cpu.set(.pc, switch (self.core.cpu.mode.adl) {
+            .z80 => util.toBacking(Cpu.u8u16{ .short = @truncate(u16, self.core.cpu.get(.pc)) +% increment, .upper = self.core.cpu.get(.mb) }),
+            .ez80 => self.core.cpu.get(.pc) +% increment,
         });
     }
 
@@ -64,7 +86,7 @@ const State = struct {
     }
 
     pub fn addR(self: *State, comptime increment: comptime_int) void {
-        self.core.cpu.r +%= increment;
+        self.core.cpu.r +%= increment << 1;
     }
 
     pub fn dispatch(self: *State, comptime dispatcher: fn (anytype, comptime u8) void) void {
@@ -73,5 +95,12 @@ const State = struct {
             if (opcode == self.temp) return dispatcher(self, opcode);
             if (opcode == std.math.maxInt(u8)) unreachable;
         }
+    }
+
+    pub fn readRegister(self: *State, comptime address: Cpu.RegisterAddress) void {
+        self.temp = self.core.cpu.get(address);
+    }
+    pub fn writeRegister(self: *State, comptime address: Cpu.RegisterAddress) void {
+        self.core.cpu.set(address, @intCast(Cpu.RegisterType(address), self.temp));
     }
 };
