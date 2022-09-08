@@ -159,10 +159,12 @@ pub usingnamespace if (CEMUCORE_DEBUGGER) struct {
 pub const cemucore = anyopaque;
 pub const cemucore_sig_handler = *const fn (cemucore_sig, ?*anyopaque) callconv(.C) void;
 
-fn AllocatorWrapper(backing_allocator: std.mem.Allocator) type {
+fn AllocatorWrapper(comptime _: struct {}) type {
     return struct {
-        fn allocator(_: *@This()) std.mem.Allocator {
-            return backing_allocator;
+        backing_allocator: std.mem.Allocator,
+
+        fn allocator(self: *@This()) std.mem.Allocator {
+            return self.backing_allocator;
         }
         fn deinit(_: *@This()) bool {
             return false;
@@ -172,10 +174,11 @@ fn AllocatorWrapper(backing_allocator: std.mem.Allocator) type {
 
 const CoreWrapper = struct {
     const backing_allocator = std.heap.c_allocator;
-    const allocator_init = if (std.debug.runtime_safety)
-        std.heap.GeneralPurposeAllocator(.{}){ .backing_allocator = backing_allocator }
+    const Allocator = if (std.debug.runtime_safety)
+        std.heap.GeneralPurposeAllocator
     else
-        AllocatorWrapper(backing_allocator){};
+        AllocatorWrapper;
+    const allocator_init = Allocator(.{}){ .backing_allocator = backing_allocator };
 
     allocator: @TypeOf(allocator_init) = allocator_init,
     sig: struct {
