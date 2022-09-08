@@ -9,6 +9,7 @@ pub fn build(b: *std.build.Builder) !void {
         "debugger",
         "Enable support for debugger features. (default: true)",
     ) orelse true;
+    const strip = b.option(bool, "strip", "Omit debug symbols. (default: false)") orelse false;
     const test_filter = b.option([]const u8, "test-filter", "Skip tests that do not match filter.");
 
     const options = b.addOptions();
@@ -66,6 +67,7 @@ pub fn build(b: *std.build.Builder) !void {
     };
     inline for (@typeInfo(@TypeOf(libraries)).Struct.fields) |field| {
         const library = @field(libraries, field.name);
+        library.strip = strip;
         library.setBuildMode(mode);
         library.addOptions("options", options);
         library.linkLibC();
