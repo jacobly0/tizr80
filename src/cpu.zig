@@ -3,12 +3,14 @@ const std = @import("std");
 const CEmuCore = @import("cemucore.zig");
 const Cpu = @This();
 const decode = @import("cpu/decode.zig");
+const Dummy = @import("cpu/dummy.zig");
 const Interpreter = @import("cpu/interp.zig");
 const util = @import("util.zig");
 
 pub const Backend = struct {
+    flush: *const fn (*Backend, *CEmuCore) void,
     step: *const fn (*Backend, *CEmuCore) void,
-    destroy: *const fn (*Backend, *std.mem.Allocator) void,
+    destroy: *const fn (*Backend, std.mem.Allocator) void,
 };
 
 pub const RegisterAddress = enum {
@@ -69,7 +71,7 @@ pub const RegisterAddress = enum {
     rpc,
 };
 
-const Adl = enum(u1) { z80, ez80 };
+pub const Adl = enum(u1) { z80, ez80 };
 
 const Mode = packed struct(u2) {
     adl: Adl,
@@ -128,6 +130,7 @@ iy: u24 = 0,
 sps: u16 = 0,
 spl: u24 = 0,
 pc: u24 = 0,
+raw_pc: u24 = 0,
 r: u8 = 0,
 mbi: u24 = 0,
 
@@ -138,6 +141,7 @@ ief2: u1 = 0,
 
 cycles: u64 = 0,
 
+need_flush: bool = false,
 backend: *Backend,
 
 pub fn RegisterType(comptime address: RegisterAddress) type {
@@ -386,6 +390,8 @@ pub fn setShadow(self: *Cpu, comptime address: RegisterAddress, value: RegisterT
 
 test "registers" {
     var cpu: Cpu = undefined;
+    cpu.backend = try Dummy.create(std.testing.allocator);
+    defer cpu.deinit(std.testing.allocator);
 
     cpu.set(.af, 0x0123);
     cpu.set(.ubc, 0x456789);
@@ -481,15 +487,24 @@ test "registers" {
     try std.testing.expectEqual(@as(u24, 0x147AD2), cpu.getShadow(.uhl));
 }
 
-pub fn init(self: *Cpu, allocator: *std.mem.Allocator) !void {
+pub fn init(self: *Cpu, allocator: std.mem.Allocator) !void {
     self.* = Cpu{
         .backend = try Interpreter.create(allocator),
     };
 }
-pub fn deinit(self: *Cpu, allocator: *std.mem.Allocator) void {
+pub fn deinit(self: *Cpu, allocator: std.mem.Allocator) void {
     self.backend.destroy(self.backend, allocator);
 }
 
+pub fn needFlush(self: *Cpu) void {
+    self.need_flush = true;
+}
+
 pub fn step(self: *Cpu) void {
-    self.backend.step(self.backend, @fieldParentPtr(CEmuCore, "cpu", self));
+    const core = @fieldParentPtr(CEmuCore, "cpu", self);
+    if (self.need_flush) {
+        self.need_flush = false;
+        self.backend.flush(self.backend, core);
+    }
+    self.backend.step(self.backend, core);
 }

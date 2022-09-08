@@ -9,6 +9,7 @@ pub fn build(b: *std.build.Builder) !void {
         "debugger",
         "Enable support for debugger features. (default: true)",
     ) orelse true;
+    const test_filter = b.option([]const u8, "test-filter", "Skip tests that do not match filter.");
 
     const options = b.addOptions();
     options.addOption(bool, "debugger", debugger);
@@ -51,6 +52,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     const main_tests = b.addTest(b.fmt("src/{s}.zig", .{project_name}));
     main_tests.setBuildMode(mode);
+    main_tests.setFilter(test_filter);
     main_tests.addOptions("options", options);
 
     const test_step = b.step("test", "Run library tests");

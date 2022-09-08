@@ -67,7 +67,7 @@ pub const Property = if (options.debugger) enum {
 
 pub const Device = enum {
     Unknown,
-    TI83PCE,
+    TI84PCE,
     TI84PCEPE,
     TI83PCE,
     TI83PCEEP,
@@ -116,8 +116,8 @@ pub fn init(self: *CEmuCore, create_options: CreateOptions) !void {
             try self.sync.?.init();
         },
     }
-    try self.mem.init(&self.allocator);
-    try self.cpu.init(&self.allocator);
+    try self.mem.init(self.allocator);
+    try self.cpu.init(self.allocator);
     try self.keypad.init();
     if (self.sync) |*sync| {
         const thread = try std.Thread.spawn(
@@ -136,8 +136,8 @@ pub fn deinit(self: *CEmuCore) void {
     if (self.sync) |*sync| sync.stop();
     if (self.thread) |thread| thread.join();
     self.keypad.deinit();
-    self.cpu.deinit(&self.allocator);
-    self.mem.deinit(&self.allocator);
+    self.cpu.deinit(self.allocator);
+    self.mem.deinit(self.allocator);
     if (self.sync) |*sync| sync.deinit();
 }
 pub fn destroy(self: *CEmuCore) void {
@@ -162,7 +162,7 @@ fn getRaw(self: *CEmuCore, property: Property, address: u24) ?u24 {
             }
         } else unreachable,
         .Key => self.keypad.getKey(@intCast(u8, address)),
-        .Ram => self.mem.readByte(Memory.ram_start + @as(u24, @intCast(u19, address))),
+        .Ram => self.mem.loadByte(Memory.ram_start + @as(u24, @intCast(u19, address))),
         .GpioEnable => self.keypad.getGpio(@intCast(u5, address)),
         else => std.debug.todo("unimplemented"),
     };
@@ -197,21 +197,26 @@ fn setRaw(self: *CEmuCore, property: Property, address: u24, value: ?u24) void {
         .Reg => inline for (@typeInfo(RegisterAddress).Enum.fields) |field| {
             if (address == field.value) {
                 const register_address = @field(RegisterAddress, field.name);
-                const register_type = Cpu.RegisterType(register_address);
-                self.cpu.set(register_address, @intCast(register_type, value.?));
+                const truncated_value = @intCast(Cpu.RegisterType(register_address), value.?);
+                switch (register_address) {
+                    .adl, .pc => if (truncated_value != self.cpu.get(register_address))
+                        self.cpu.needFlush(),
+                    else => {},
+                }
+                self.cpu.set(register_address, truncated_value);
                 break;
             }
         } else unreachable,
         .RegShadow => inline for (@typeInfo(RegisterAddress).Enum.fields) |field| {
             if (address == field.value) {
                 const register_address = @field(RegisterAddress, field.name);
-                const register_type = Cpu.RegisterType(register_address);
-                self.cpu.setShadow(register_address, @intCast(register_type, value.?));
+                const truncated_value = @intCast(Cpu.RegisterType(register_address), value.?);
+                self.cpu.setShadow(register_address, truncated_value);
                 break;
             }
         },
         .Key => self.keypad.setKey(@intCast(u8, address), @intCast(u1, value.?)),
-        .Ram => self.mem.writeByte(Memory.ram_start + @as(u24, @intCast(u19, address)), @intCast(u8, value.?)),
+        .Ram => self.mem.storeByte(Memory.ram_start + @as(u24, @intCast(u19, address)), @intCast(u8, value.?)),
         .GpioEnable => self.keypad.setGpio(@intCast(u5, address), @intCast(u1, value.?)),
         else => std.debug.todo("unimplemented"),
     }
@@ -309,4 +314,8 @@ test "sleep/wake" {
 test "single threaded" {
     const core = try CEmuCore.create(.{ .allocator = std.testing.allocator, .threading = .SingleThreaded });
     defer core.destroy();
+}
+
+test {
+    std.testing.refAllDecls(CEmuCore);
 }
