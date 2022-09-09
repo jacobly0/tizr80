@@ -5,26 +5,42 @@ on: [push]
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
         runs-on: [ubuntu, macos, windows]
-        build-mode: [Debug, ReleaseSafe, ReleaseFast, ReleaseSmall]
-        include:
-          - runs-on: windows
-            env: "env:"
-            exe: .exe
+        build-mode: [debug, release-safe, release-fast, release-small]
     runs-on: ${{matrix.runs-on}}-latest
     steps:
+      - name: Install Build Dependencies
+        if: runner.os == 'Linux'
+        run: sudo snap install zig --classic --edge
+      - name: Install Build Dependencies
+        if: runner.os == 'macOS'
+        run: brew install zig --HEAD
+      - name: Install Build Dependencies
+        if: runner.os == 'Windows'
+        run: |
+          Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+          iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
+          scoop bucket add versions
+          scoop install versions/zig-dev
+          Add-Content -Path $Env:GITHUB_PATH -Value $HOME\scoop\shims
+
+      - name: Test Build Dependencies
+        run: zig version
+
       - name: Checkout
-        uses: actions/checkout@v3.0.4
+        uses: actions/checkout@v3
 
       - name: Format
-        run: zig fmt
+        if: runner.os != 'Windows'
+        run: zig build fmt
 
       - name: Diff
         run: git diff --exit-code
 
       - name: Build
-        run: zig build -Dmode=
+        run: zig build -D${{matrix.build-mode}}=true
 
       - name: Install
         run: zig build install
@@ -32,8 +48,8 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v3.1.0
         with:
-          name: CEmuCore-${{runner.os}}
-          path: build/zig-out
+          name: CEmuCore-${{runner.os}}-${{matrix.build-mode}}
+          path: zig-out
 
       - name: Test
         run: zig build test

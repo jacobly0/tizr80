@@ -4,6 +4,7 @@ pub fn build(b: *std.build.Builder) !void {
     const project_name = std.fs.path.basename(b.build_root);
 
     const mode = b.standardReleaseOptions();
+    const debug_mode = b.option(bool, "debug", "Optimizations off and safety on") orelse false;
     const debugger = b.option(
         bool,
         "debugger",
@@ -11,6 +12,12 @@ pub fn build(b: *std.build.Builder) !void {
     ) orelse true;
     const strip = b.option(bool, "strip", "Omit debug symbols. (default: false)") orelse false;
     const test_filter = b.option([]const u8, "test-filter", "Skip tests that do not match filter.");
+
+    if (mode != .Debug and debug_mode) {
+        std.log.err("Both debug (-Ddebug) and release (of -Drelease-safe, " ++
+            "-Drelease-fast and -Drelease-small)\n", .{});
+        b.invalid_user_input = true;
+    }
 
     const options = b.addOptions();
     options.addOption(bool, "debugger", debugger);
