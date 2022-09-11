@@ -7,16 +7,16 @@ const Dummy = @import("cpu/dummy.zig");
 const Interpreter = @import("cpu/interp.zig");
 const util = @import("util.zig");
 
+pub const ExecuteMode = enum { flush, step, run };
 pub const Backend = struct {
-    flush: *const fn (*Backend, *CEmuCore) void,
-    step: *const fn (*Backend, *CEmuCore) void,
+    flush: bool = true,
+    execute: *const fn (*Backend, *CEmuCore, ExecuteMode) void,
     destroy: *const fn (*Backend, std.mem.Allocator) void,
 };
 
 pub const RegisterAddress = enum {
     // 1-bit state
     adl,
-    madl,
     ief,
 
     // 1-bit flags
@@ -68,7 +68,6 @@ pub const RegisterAddress = enum {
     uiy,
     spl,
     pc,
-    rpc,
 };
 
 pub const Adl = enum(u1) { z80, ez80 };
@@ -141,15 +140,14 @@ ief2: u1 = 0,
 
 cycles: u64 = 0,
 
-need_flush: bool = false,
 backend: *Backend,
 
 pub fn RegisterType(comptime address: RegisterAddress) type {
     return switch (address) {
-        .adl, .madl, .ief, .cf, .nf, .pv, .xf, .hc, .yf, .zf, .sf => u1,
+        .adl, .ief, .cf, .nf, .pv, .xf, .hc, .yf, .zf, .sf => u1,
         .f, .a, .c, .b, .bcu, .e, .d, .deu, .l, .h, .hlu, .ixl, .ixh, .ixu, .iyl, .iyh, .iyu, .r, .mb => u8,
         .af, .bc, .de, .hl, .ix, .iy, .sps, .i => u16,
-        .ubc, .ude, .uhl, .uix, .uiy, .spl, .pc, .rpc => u24,
+        .ubc, .ude, .uhl, .uix, .uiy, .spl, .pc => u24,
     };
 }
 
@@ -157,7 +155,6 @@ pub fn get(self: *const Cpu, comptime address: RegisterAddress) RegisterType(add
     return switch (address) {
         // 1-bit state
         .adl => @enumToInt(self.mode.adl),
-        .madl => @enumToInt(self.mode.madl),
         .ief => self.ief1,
 
         // 1-bit flags
@@ -218,14 +215,13 @@ pub fn get(self: *const Cpu, comptime address: RegisterAddress) RegisterType(add
         .uiy => self.iy,
         .spl => self.spl,
         .pc => self.pc,
-        .rpc => std.debug.todo("unimplemented"),
     };
 }
 
 pub fn getShadow(self: *const Cpu, comptime address: RegisterAddress) RegisterType(address) {
     return switch (address) {
         // 1-bit state
-        .adl, .madl => unreachable,
+        .adl => @enumToInt(self.mode.madl),
         .ief => self.ief2,
 
         // 1-bit flags
@@ -263,7 +259,8 @@ pub fn getShadow(self: *const Cpu, comptime address: RegisterAddress) RegisterTy
         .ubc => self.@"bc'",
         .ude => self.@"de'",
         .uhl => self.@"hl'",
-        .uix, .uiy, .spl, .pc, .rpc => unreachable,
+        .uix, .uiy, .spl => unreachable,
+        .pc => self.raw_pc,
     };
 }
 
@@ -271,7 +268,6 @@ pub fn set(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(ad
     switch (address) {
         // 1-bit state
         .adl => self.mode.adl = @intToEnum(Adl, value),
-        .madl => self.mode.madl = @intToEnum(Adl, value),
         .ief => {
             self.ief1 = value;
             self.setShadow(.ief, value);
@@ -339,14 +335,13 @@ pub fn set(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(ad
         .uiy => self.iy = value,
         .spl => self.spl = value,
         .pc => self.pc = value,
-        .rpc => std.debug.todo("unimplemented"),
     }
 }
 
 pub fn setShadow(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(address)) void {
     switch (address) {
         // 1-bit state
-        .adl, .madl => unreachable,
+        .adl => self.mode.madl = @intToEnum(Adl, value),
         .ief => self.ief2 = value,
 
         // 1-bit flags
@@ -384,7 +379,8 @@ pub fn setShadow(self: *Cpu, comptime address: RegisterAddress, value: RegisterT
         .ubc => self.@"bc'" = value,
         .ude => self.@"de'" = value,
         .uhl => self.@"hl'" = value,
-        .uix, .uiy, .spl, .pc, .rpc => unreachable,
+        .uix, .uiy, .spl => unreachable,
+        .pc => self.raw_pc = value,
     }
 }
 
@@ -497,14 +493,22 @@ pub fn deinit(self: *Cpu, allocator: std.mem.Allocator) void {
 }
 
 pub fn needFlush(self: *Cpu) void {
-    self.need_flush = true;
+    self.backend.flush = true;
+}
+
+pub fn flush(self: *Cpu) void {
+    self.execute(.flush);
 }
 
 pub fn step(self: *Cpu) void {
+    self.execute(.step);
+}
+
+pub fn run(self: *Cpu) void {
+    self.execute(.run);
+}
+
+fn execute(self: *Cpu, mode: ExecuteMode) void {
     const core = @fieldParentPtr(CEmuCore, "cpu", self);
-    if (self.need_flush) {
-        self.need_flush = false;
-        self.backend.flush(self.backend, core);
-    }
-    self.backend.step(self.backend, core);
+    self.backend.execute(self.backend, core, mode);
 }

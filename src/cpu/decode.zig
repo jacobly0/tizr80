@@ -1,6 +1,43 @@
 const std = @import("std");
 
 const CEmuCore = @import("../cemucore.zig");
+const Cpu = @import("../cpu.zig");
+
+pub const Mode = struct {
+    pub const Instruction = enum(u1) {
+        s,
+        l,
+
+        pub fn fromAdl(adl: Cpu.Adl) Instruction {
+            return switch (adl) {
+                .z80 => .s,
+                .ez80 => .l,
+            };
+        }
+    };
+    const Immediate = enum(u1) {
+        is,
+        il,
+
+        fn fromAdl(adl: Cpu.Adl) Immediate {
+            return switch (adl) {
+                .z80 => .is,
+                .ez80 => .il,
+            };
+        }
+    };
+
+    inst: Instruction,
+    imm: Immediate,
+
+    pub fn fromAdl(adl: Cpu.Adl) Mode {
+        return .{
+            .inst = Instruction.fromAdl(adl),
+            .imm = Immediate.fromAdl(adl),
+        };
+    }
+};
+pub const PrefetchMode = enum(u1) { prefetch, cached };
 
 const Uop = enum {
     unimplemented,
@@ -13,9 +50,6 @@ const Uop = enum {
     mask_addr_adl,
     mask_addr_inst,
 
-    fetch_byte,
-    fetch_word,
-
     add_r_1,
     add_cc_1,
 
@@ -25,48 +59,71 @@ const Uop = enum {
     mode_lis,
     mode_sil,
     mode_lil,
+    adl_inst,
+    adl_imm,
+    clear_ief,
+    set_ief,
 
     halt,
 
-    read_b,
-    read_c,
-    read_d,
-    read_e,
-    read_h,
-    read_l,
-    read_a,
-    read_af,
-    read_bc,
-    read_de,
-    read_hl,
-    read_sp,
-    @"read_af'",
-    @"read_bc'",
-    @"read_de'",
-    @"read_hl'",
+    nz,
+    z,
+    nc,
+    c,
+    po,
+    pe,
+    p,
+    m,
 
-    write_b,
-    write_c,
-    write_d,
-    write_e,
-    write_h,
-    write_l,
-    write_a,
-    write_af,
-    write_bc,
-    write_de,
-    write_hl,
-    write_sp,
-    @"write_af'",
-    @"write_bc'",
-    @"write_de'",
-    @"write_hl'",
+    load_a_high,
+    load_b,
+    load_c,
+    load_d,
+    load_e,
+    load_h,
+    load_l,
+    load_a,
+    load_af,
+    load_bc,
+    load_de,
+    load_hl,
+    load_sp,
+    load_pc,
+    @"load_af'",
+    @"load_bc'",
+    @"load_de'",
+    @"load_hl'",
 
-    load_byte,
-    load_word,
+    store_b,
+    store_c,
+    store_d,
+    store_e,
+    store_h,
+    store_l,
+    store_a,
+    store_af,
+    store_bc,
+    store_de,
+    store_hl,
+    store_sp,
+    store_pc,
+    @"store_af'",
+    @"store_bc'",
+    @"store_de'",
+    @"store_hl'",
 
-    store_byte,
-    store_word,
+    flush,
+    fetch_byte,
+    fetch_word,
+    fetch_word_cached,
+
+    read_port,
+    read_byte,
+    read_word,
+
+    write_port,
+    write_byte,
+    write_word,
 
     inc_byte,
     dec_byte,
@@ -77,132 +134,132 @@ const Uop = enum {
 
 const base = [_][]const Uop{
     &[_]Uop{}, // nop
-    &[_]Uop{ .fetch_word, .mask_word_inst, .write_bc }, // ld bc,nn
-    &[_]Uop{ .read_bc, .save, .mask_addr_inst, .read_a, .store_byte }, // ld (bc),a
-    &[_]Uop{ .read_bc, .inc_word, .mask_word_inst, .write_bc }, // inc bc
-    &[_]Uop{ .read_b, .inc_byte, .write_b }, // inc b
-    &[_]Uop{ .read_b, .dec_byte, .write_b }, // dec b
-    &[_]Uop{ .fetch_byte, .write_b }, // ld b,n
+    &[_]Uop{ .fetch_word, .mask_word_inst, .store_bc }, // ld bc,nn
+    &[_]Uop{ .load_bc, .save, .mask_addr_inst, .load_a, .write_byte }, // ld (bc),a
+    &[_]Uop{ .load_bc, .inc_word, .mask_word_inst, .store_bc }, // inc bc
+    &[_]Uop{ .load_b, .inc_byte, .store_b }, // inc b
+    &[_]Uop{ .load_b, .dec_byte, .store_b }, // dec b
+    &[_]Uop{ .fetch_byte, .store_b }, // ld b,n
     &[_]Uop{.unimplemented}, // rlca
-    &[_]Uop{ .read_af, .save, .@"read_af'", .write_af, .restore, .@"write_af'" }, // ex af,af'
-    &[_]Uop{ .read_bc, .save, .read_hl, .add_words, .write_hl }, // add hl,bc
-    &[_]Uop{ .read_bc, .save, .mask_addr_inst, .load_byte, .write_a }, // ld a,(bc)
-    &[_]Uop{ .read_bc, .dec_word, .mask_word_inst, .write_bc }, // dec bc
-    &[_]Uop{ .read_c, .inc_byte, .write_c }, // inc c
-    &[_]Uop{ .read_c, .dec_byte, .write_c }, // dec c
-    &[_]Uop{ .fetch_byte, .write_c }, // ld c,n
+    &[_]Uop{ .load_af, .save, .@"load_af'", .store_af, .restore, .@"store_af'" }, // ex af,af'
+    &[_]Uop{ .load_bc, .save, .load_hl, .add_words, .store_hl }, // add hl,bc
+    &[_]Uop{ .load_bc, .save, .mask_addr_inst, .read_byte, .store_a }, // ld a,(bc)
+    &[_]Uop{ .load_bc, .dec_word, .mask_word_inst, .store_bc }, // dec bc
+    &[_]Uop{ .load_c, .inc_byte, .store_c }, // inc c
+    &[_]Uop{ .load_c, .dec_byte, .store_c }, // dec c
+    &[_]Uop{ .fetch_byte, .store_c }, // ld c,n
     &[_]Uop{.unimplemented}, // rrca
     &[_]Uop{.unimplemented}, // djnz d
-    &[_]Uop{ .fetch_word, .mask_word_inst, .write_de }, // ld de,nn
-    &[_]Uop{ .read_de, .save, .mask_addr_inst, .read_a, .store_byte }, // ld (de),a
-    &[_]Uop{ .read_de, .inc_word, .mask_word_inst, .write_de }, // inc de
-    &[_]Uop{ .read_d, .inc_byte, .write_d }, // inc d
-    &[_]Uop{ .read_d, .dec_byte, .write_d }, // dec d
-    &[_]Uop{ .fetch_byte, .write_d }, // ld d,n
+    &[_]Uop{ .fetch_word, .mask_word_inst, .store_de }, // ld de,nn
+    &[_]Uop{ .load_de, .save, .mask_addr_inst, .load_a, .write_byte }, // ld (de),a
+    &[_]Uop{ .load_de, .inc_word, .mask_word_inst, .store_de }, // inc de
+    &[_]Uop{ .load_d, .inc_byte, .store_d }, // inc d
+    &[_]Uop{ .load_d, .dec_byte, .store_d }, // dec d
+    &[_]Uop{ .fetch_byte, .store_d }, // ld d,n
     &[_]Uop{.unimplemented}, // rla
     &[_]Uop{.unimplemented}, // jr d
-    &[_]Uop{ .read_de, .save, .read_hl, .add_words, .write_hl }, // add hl,de
-    &[_]Uop{ .read_de, .save, .mask_addr_inst, .load_byte, .write_a }, // ld a,(de)
-    &[_]Uop{ .read_de, .dec_word, .mask_word_inst, .write_de }, // dec de
-    &[_]Uop{ .read_e, .inc_byte, .write_e }, // inc e
-    &[_]Uop{ .read_e, .dec_byte, .write_e }, // dec e
-    &[_]Uop{ .fetch_byte, .write_e }, // ld e,n
+    &[_]Uop{ .load_de, .save, .load_hl, .add_words, .store_hl }, // add hl,de
+    &[_]Uop{ .load_de, .save, .mask_addr_inst, .read_byte, .store_a }, // ld a,(de)
+    &[_]Uop{ .load_de, .dec_word, .mask_word_inst, .store_de }, // dec de
+    &[_]Uop{ .load_e, .inc_byte, .store_e }, // inc e
+    &[_]Uop{ .load_e, .dec_byte, .store_e }, // dec e
+    &[_]Uop{ .fetch_byte, .store_e }, // ld e,n
     &[_]Uop{.unimplemented}, // rra
     &[_]Uop{.unimplemented}, // jr nz,d
-    &[_]Uop{ .fetch_word, .mask_word_inst, .write_hl }, // ld hl,nn
-    &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .read_hl, .store_word }, // ld (nn),hl
-    &[_]Uop{ .read_hl, .inc_word, .mask_word_inst, .write_hl }, // inc hl
-    &[_]Uop{ .read_h, .inc_byte, .write_h }, // inc h
-    &[_]Uop{ .read_h, .dec_byte, .write_h }, // dec h
-    &[_]Uop{ .fetch_byte, .write_h }, // ld h,n
+    &[_]Uop{ .fetch_word, .mask_word_inst, .store_hl }, // ld hl,nn
+    &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .load_hl, .write_word }, // ld (nn),hl
+    &[_]Uop{ .load_hl, .inc_word, .mask_word_inst, .store_hl }, // inc hl
+    &[_]Uop{ .load_h, .inc_byte, .store_h }, // inc h
+    &[_]Uop{ .load_h, .dec_byte, .store_h }, // dec h
+    &[_]Uop{ .fetch_byte, .store_h }, // ld h,n
     &[_]Uop{.unimplemented}, // daa
     &[_]Uop{.unimplemented}, // jr z,d
-    &[_]Uop{ .read_hl, .save, .add_words, .write_hl }, // add hl,hl
-    &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .load_word, .write_hl }, // ld hl,(nn)
-    &[_]Uop{ .read_hl, .dec_word, .mask_word_inst, .write_hl }, // dec hl
-    &[_]Uop{ .read_l, .inc_byte, .write_l }, // inc l
-    &[_]Uop{ .read_l, .dec_byte, .write_l }, // dec l
-    &[_]Uop{ .fetch_byte, .write_l }, // ld l,n
+    &[_]Uop{ .load_hl, .save, .add_words, .store_hl }, // add hl,hl
+    &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .read_word, .store_hl }, // ld hl,(nn)
+    &[_]Uop{ .load_hl, .dec_word, .mask_word_inst, .store_hl }, // dec hl
+    &[_]Uop{ .load_l, .inc_byte, .store_l }, // inc l
+    &[_]Uop{ .load_l, .dec_byte, .store_l }, // dec l
+    &[_]Uop{ .fetch_byte, .store_l }, // ld l,n
     &[_]Uop{.unimplemented}, // cpl
     &[_]Uop{.unimplemented}, // jr nc,d
-    &[_]Uop{ .fetch_word, .write_sp }, // ld sp,nn
-    &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .read_a, .store_byte }, // ld (nn),a
-    &[_]Uop{ .read_sp, .inc_word, .write_sp }, // inc sp
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .load_byte, .add_cc_1, .inc_byte, .store_byte }, // inc (hl)
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .load_byte, .add_cc_1, .dec_byte, .store_byte }, // dec (hl)
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .fetch_byte, .store_byte }, // ld (hl),n
+    &[_]Uop{ .fetch_word, .store_sp }, // ld sp,nn
+    &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .load_a, .write_byte }, // ld (nn),a
+    &[_]Uop{ .load_sp, .inc_word, .store_sp }, // inc sp
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .add_cc_1, .inc_byte, .write_byte }, // inc (hl)
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .add_cc_1, .dec_byte, .write_byte }, // dec (hl)
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .fetch_byte, .write_byte }, // ld (hl),n
     &[_]Uop{.unimplemented}, // scf
     &[_]Uop{.unimplemented}, // jr c,d
-    &[_]Uop{ .read_sp, .save, .read_hl, .add_words, .write_hl }, // add hl,sp
-    &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .load_byte, .write_a }, // ld a,(nn)
-    &[_]Uop{ .read_sp, .dec_word, .write_sp }, // dec sp
-    &[_]Uop{ .read_a, .inc_byte, .write_a }, // inc a
-    &[_]Uop{ .read_a, .dec_byte, .write_a }, // dec a
-    &[_]Uop{ .fetch_byte, .write_a }, // ld a,n
+    &[_]Uop{ .load_sp, .save, .load_hl, .add_words, .store_hl }, // add hl,sp
+    &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .read_byte, .store_a }, // ld a,(nn)
+    &[_]Uop{ .load_sp, .dec_word, .store_sp }, // dec sp
+    &[_]Uop{ .load_a, .inc_byte, .store_a }, // inc a
+    &[_]Uop{ .load_a, .dec_byte, .store_a }, // dec a
+    &[_]Uop{ .fetch_byte, .store_a }, // ld a,n
     &[_]Uop{.unimplemented}, // ccf
     &[_]Uop{ .mode_sis, .add_r_1, .fetch_byte, .dispatch_base }, // .sis
-    &[_]Uop{ .read_c, .write_b }, // ld b,c
-    &[_]Uop{ .read_d, .write_b }, // ld b,d
-    &[_]Uop{ .read_e, .write_b }, // ld b,e
-    &[_]Uop{ .read_h, .write_b }, // ld b,h
-    &[_]Uop{ .read_l, .write_b }, // ld b,l
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .load_byte, .write_b }, // ld b,(hl)
-    &[_]Uop{ .read_a, .write_b }, // ld b,a
-    &[_]Uop{ .read_b, .write_c }, // ld c,b
+    &[_]Uop{ .load_c, .store_b }, // ld b,c
+    &[_]Uop{ .load_d, .store_b }, // ld b,d
+    &[_]Uop{ .load_e, .store_b }, // ld b,e
+    &[_]Uop{ .load_h, .store_b }, // ld b,h
+    &[_]Uop{ .load_l, .store_b }, // ld b,l
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .store_b }, // ld b,(hl)
+    &[_]Uop{ .load_a, .store_b }, // ld b,a
+    &[_]Uop{ .load_b, .store_c }, // ld c,b
     &[_]Uop{ .mode_lis, .add_r_1, .fetch_byte, .dispatch_base }, // .lis
-    &[_]Uop{ .read_d, .write_c }, // ld c,d
-    &[_]Uop{ .read_e, .write_c }, // ld c,e
-    &[_]Uop{ .read_h, .write_c }, // ld c,h
-    &[_]Uop{ .read_l, .write_c }, // ld c,l
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .load_byte, .write_c }, // ld c,(hl)
-    &[_]Uop{ .read_a, .write_c }, // ld c,a
-    &[_]Uop{ .read_b, .write_d }, // ld d,b
-    &[_]Uop{ .read_c, .write_d }, // ld d,c
+    &[_]Uop{ .load_d, .store_c }, // ld c,d
+    &[_]Uop{ .load_e, .store_c }, // ld c,e
+    &[_]Uop{ .load_h, .store_c }, // ld c,h
+    &[_]Uop{ .load_l, .store_c }, // ld c,l
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .store_c }, // ld c,(hl)
+    &[_]Uop{ .load_a, .store_c }, // ld c,a
+    &[_]Uop{ .load_b, .store_d }, // ld d,b
+    &[_]Uop{ .load_c, .store_d }, // ld d,c
     &[_]Uop{ .mode_sil, .add_r_1, .fetch_byte, .dispatch_base }, // .sil
-    &[_]Uop{ .read_e, .write_d }, // ld d,e
-    &[_]Uop{ .read_h, .write_d }, // ld d,h
-    &[_]Uop{ .read_l, .write_d }, // ld d,l
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .load_byte, .write_d }, // ld d,(hl)
-    &[_]Uop{ .read_a, .write_d }, // ld d,a
-    &[_]Uop{ .read_b, .write_e }, // ld e,b
-    &[_]Uop{ .read_c, .write_e }, // ld e,c
-    &[_]Uop{ .read_d, .write_e }, // ld e,d
+    &[_]Uop{ .load_e, .store_d }, // ld d,e
+    &[_]Uop{ .load_h, .store_d }, // ld d,h
+    &[_]Uop{ .load_l, .store_d }, // ld d,l
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .store_d }, // ld d,(hl)
+    &[_]Uop{ .load_a, .store_d }, // ld d,a
+    &[_]Uop{ .load_b, .store_e }, // ld e,b
+    &[_]Uop{ .load_c, .store_e }, // ld e,c
+    &[_]Uop{ .load_d, .store_e }, // ld e,d
     &[_]Uop{ .mode_lil, .add_r_1, .fetch_byte, .dispatch_base }, // .lil
-    &[_]Uop{ .read_h, .write_e }, // ld e,h
-    &[_]Uop{ .read_l, .write_e }, // ld e,l
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .load_byte, .write_e }, // ld e,(hl)
-    &[_]Uop{ .read_a, .write_e }, // ld e,a
-    &[_]Uop{ .read_b, .write_h }, // ld h,b
-    &[_]Uop{ .read_c, .write_h }, // ld h,c
-    &[_]Uop{ .read_d, .write_h }, // ld h,d
-    &[_]Uop{ .read_e, .write_h }, // ld h,e
+    &[_]Uop{ .load_h, .store_e }, // ld e,h
+    &[_]Uop{ .load_l, .store_e }, // ld e,l
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .store_e }, // ld e,(hl)
+    &[_]Uop{ .load_a, .store_e }, // ld e,a
+    &[_]Uop{ .load_b, .store_h }, // ld h,b
+    &[_]Uop{ .load_c, .store_h }, // ld h,c
+    &[_]Uop{ .load_d, .store_h }, // ld h,d
+    &[_]Uop{ .load_e, .store_h }, // ld h,e
     &[_]Uop{}, // ld h,h
-    &[_]Uop{ .read_l, .write_h }, // ld h,l
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .load_byte, .write_h }, // ld h,(hl)
-    &[_]Uop{ .read_a, .write_h }, // ld h,a
-    &[_]Uop{ .read_b, .write_l }, // ld l,b
-    &[_]Uop{ .read_c, .write_l }, // ld l,c
-    &[_]Uop{ .read_d, .write_l }, // ld l,d
-    &[_]Uop{ .read_e, .write_l }, // ld l,e
-    &[_]Uop{ .read_h, .write_l }, // ld l,h
+    &[_]Uop{ .load_l, .store_h }, // ld h,l
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .store_h }, // ld h,(hl)
+    &[_]Uop{ .load_a, .store_h }, // ld h,a
+    &[_]Uop{ .load_b, .store_l }, // ld l,b
+    &[_]Uop{ .load_c, .store_l }, // ld l,c
+    &[_]Uop{ .load_d, .store_l }, // ld l,d
+    &[_]Uop{ .load_e, .store_l }, // ld l,e
+    &[_]Uop{ .load_h, .store_l }, // ld l,h
     &[_]Uop{}, // ld l,l
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .load_byte, .write_l }, // ld l,(hl)
-    &[_]Uop{ .read_a, .write_l }, // ld a,l
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .read_b, .store_byte }, // ld (hl),b
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .read_c, .store_byte }, // ld (hl),c
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .read_d, .store_byte }, // ld (hl),d
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .read_e, .store_byte }, // ld (hl),e
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .read_h, .store_byte }, // ld (hl),h
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .read_l, .store_byte }, // ld (hl),l
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .store_l }, // ld l,(hl)
+    &[_]Uop{ .load_a, .store_l }, // ld a,l
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .load_b, .write_byte }, // ld (hl),b
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .load_c, .write_byte }, // ld (hl),c
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .load_d, .write_byte }, // ld (hl),d
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .load_e, .write_byte }, // ld (hl),e
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .load_h, .write_byte }, // ld (hl),h
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .load_l, .write_byte }, // ld (hl),l
     &[_]Uop{.halt}, // halt
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .read_a, .store_byte }, // ld (hl),a
-    &[_]Uop{ .read_b, .write_a }, // ld a,b
-    &[_]Uop{ .read_c, .write_a }, // ld a,c
-    &[_]Uop{ .read_d, .write_a }, // ld a,d
-    &[_]Uop{ .read_e, .write_a }, // ld a,e
-    &[_]Uop{ .read_h, .write_a }, // ld a,h
-    &[_]Uop{ .read_l, .write_a }, // ld a,l
-    &[_]Uop{ .read_hl, .save, .mask_addr_inst, .load_byte, .write_a }, // ld a,(hl)
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .load_a, .write_byte }, // ld (hl),a
+    &[_]Uop{ .load_b, .store_a }, // ld a,b
+    &[_]Uop{ .load_c, .store_a }, // ld a,c
+    &[_]Uop{ .load_d, .store_a }, // ld a,d
+    &[_]Uop{ .load_e, .store_a }, // ld a,e
+    &[_]Uop{ .load_h, .store_a }, // ld a,h
+    &[_]Uop{ .load_l, .store_a }, // ld a,l
+    &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .store_a }, // ld a,(hl)
     &[_]Uop{}, // ld a,a
     &[_]Uop{.unimplemented}, // add a,b
     &[_]Uop{.unimplemented}, // add a,c
@@ -270,15 +327,15 @@ const base = [_][]const Uop{
     &[_]Uop{.unimplemented}, // cp a,a
     &[_]Uop{.unimplemented}, // ret nz
     &[_]Uop{.unimplemented}, // pop bc
-    &[_]Uop{.unimplemented}, // jp nz,nn
-    &[_]Uop{.unimplemented}, // jp nn
+    &[_]Uop{ .fetch_word_cached, .flush, .nz, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp nz,nn
+    &[_]Uop{ .fetch_word_cached, .flush, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp nn
     &[_]Uop{.unimplemented}, // call nz,nn
     &[_]Uop{.unimplemented}, // push bc
     &[_]Uop{ .fetch_byte, .unimplemented }, // add a,n
     &[_]Uop{.unimplemented}, // rst 00h
     &[_]Uop{.unimplemented}, // ret z
     &[_]Uop{.unimplemented}, // ret
-    &[_]Uop{.unimplemented}, // jp z,nn
+    &[_]Uop{ .fetch_word_cached, .flush, .z, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp z,nn
     &[_]Uop{.unimplemented}, // CB
     &[_]Uop{.unimplemented}, // call z,nn
     &[_]Uop{.unimplemented}, // call nn
@@ -286,76 +343,76 @@ const base = [_][]const Uop{
     &[_]Uop{.unimplemented}, // rst 08h
     &[_]Uop{.unimplemented}, // ret nc
     &[_]Uop{.unimplemented}, // pop de
-    &[_]Uop{.unimplemented}, // jp nc,nn
-    &[_]Uop{.unimplemented}, // out (n),a
+    &[_]Uop{ .fetch_word_cached, .flush, .nc, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp nc,nn
+    &[_]Uop{ .fetch_byte, .load_a_high, .save, .load_a, .write_port }, // out (n),a
     &[_]Uop{.unimplemented}, // call nc,nn
     &[_]Uop{.unimplemented}, // push de
     &[_]Uop{ .fetch_byte, .unimplemented }, // sub a,n
     &[_]Uop{.unimplemented}, // rst 10h
     &[_]Uop{.unimplemented}, // ret c
     &[_]Uop{
-        .read_bc, .save, .@"read_bc'", .write_bc, .restore, .@"write_bc'",
-        .read_de, .save, .@"read_de'", .write_de, .restore, .@"write_de'",
-        .read_hl, .save, .@"read_hl'", .write_hl, .restore, .@"write_hl'",
+        .load_bc, .save, .@"load_bc'", .store_bc, .restore, .@"store_bc'",
+        .load_de, .save, .@"load_de'", .store_de, .restore, .@"store_de'",
+        .load_hl, .save, .@"load_hl'", .store_hl, .restore, .@"store_hl'",
     }, // exx
-    &[_]Uop{.unimplemented}, // jp c,nn
-    &[_]Uop{.unimplemented}, // in a,(n)
+    &[_]Uop{ .fetch_word_cached, .flush, .c, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp c,nn
+    &[_]Uop{ .fetch_byte, .load_a_high, .save, .read_port, .store_a }, // in a,(n)
     &[_]Uop{.unimplemented}, // call c,nn
     &[_]Uop{.unimplemented}, // DD
     &[_]Uop{ .fetch_byte, .unimplemented }, // sbc a,n
     &[_]Uop{.unimplemented}, // rst 18h
     &[_]Uop{.unimplemented}, // ret po
     &[_]Uop{.unimplemented}, // pop hl
-    &[_]Uop{.unimplemented}, // jp po,nn
+    &[_]Uop{ .fetch_word_cached, .flush, .po, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp po,nn
     &[_]Uop{.unimplemented}, // ex (sp),hl
     &[_]Uop{.unimplemented}, // call po,nn
     &[_]Uop{.unimplemented}, // push hl
     &[_]Uop{ .fetch_byte, .unimplemented }, // and a,n
     &[_]Uop{.unimplemented}, // rst 20h
     &[_]Uop{.unimplemented}, // ret pe
-    &[_]Uop{.unimplemented}, // jp (hl)
-    &[_]Uop{.unimplemented}, // jp pe,nn
-    &[_]Uop{.unimplemented}, // ex de,hl
+    &[_]Uop{ .flush, .fetch_byte, .load_hl, .mask_word_inst, .store_pc, .adl_inst }, // jp (hl)
+    &[_]Uop{ .fetch_word_cached, .flush, .pe, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp pe,nn
+    &[_]Uop{ .load_de, .save, .load_hl, .mask_word_inst, .store_de, .restore, .mask_word_inst, .store_hl }, // ex de,hl
     &[_]Uop{.unimplemented}, // call pe,nn
     &[_]Uop{.unimplemented}, // ED
     &[_]Uop{ .fetch_byte, .unimplemented }, // xor a,n
     &[_]Uop{.unimplemented}, // rst 28h
     &[_]Uop{.unimplemented}, // ret p
     &[_]Uop{.unimplemented}, // pop af
-    &[_]Uop{.unimplemented}, // jp p,nn
-    &[_]Uop{.unimplemented}, // di
+    &[_]Uop{ .fetch_word_cached, .flush, .p, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp p,nn
+    &[_]Uop{.clear_ief}, // di
     &[_]Uop{.unimplemented}, // call p,nn
     &[_]Uop{.unimplemented}, // push af
     &[_]Uop{ .fetch_byte, .unimplemented }, // or a,n
     &[_]Uop{.unimplemented}, // rst 30h
     &[_]Uop{.unimplemented}, // ret m
-    &[_]Uop{ .read_hl, .write_sp }, // ld sp,hl
-    &[_]Uop{.unimplemented}, // jp m,nn
-    &[_]Uop{.unimplemented}, // ei
+    &[_]Uop{ .load_hl, .store_sp }, // ld sp,hl
+    &[_]Uop{ .fetch_word_cached, .flush, .m, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp m,nn
+    &[_]Uop{ .set_ief, .add_r_1, .fetch_byte, .dispatch_base }, // ei
     &[_]Uop{.unimplemented}, // call m,nn
     &[_]Uop{.unimplemented}, // FD
     &[_]Uop{ .fetch_byte, .unimplemented }, // cp a,n
     &[_]Uop{.unimplemented}, // rst 38h
 };
 
-pub fn decode(impl: anytype) void {
-    dispatchAll(impl, &[_]Uop{ .add_r_1, .fetch_byte, .dispatch_base });
+pub fn decode(impl: anytype) anyerror!void {
+    try dispatchAll(impl, &[_]Uop{ .add_r_1, .fetch_byte, .dispatch_base });
 }
 
-fn dispatcherFor(comptime table: *const [1 << 8][]const Uop) fn (anytype, comptime u8) void {
+fn dispatcherFor(comptime table: *const [1 << 8][]const Uop) fn (anytype, comptime u8) anyerror!void {
     return struct {
-        fn dispatcher(impl: anytype, comptime opcode: u8) void {
-            dispatchAll(impl, table[opcode]);
+        fn dispatcher(impl: anytype, comptime opcode: u8) anyerror!void {
+            try dispatchAll(impl, table[opcode]);
         }
     }.dispatcher;
 }
 
-fn dispatchAll(impl: anytype, comptime uops: []const Uop) void {
-    inline for (uops) |uop| dispatch(impl, uop);
+fn dispatchAll(impl: anytype, comptime uops: []const Uop) anyerror!void {
+    inline for (uops) |uop| try dispatch(impl, uop);
 }
 
-fn dispatch(impl: anytype, comptime uop: Uop) void {
-    switch (uop) {
+fn dispatch(impl: anytype, comptime uop: Uop) anyerror!void {
+    try switch (uop) {
         .unimplemented => if (true)
             impl.skip()
         else
@@ -365,69 +422,92 @@ fn dispatch(impl: anytype, comptime uop: Uop) void {
         .restore => impl.restore(),
         .swap => impl.swap(),
 
-        .mask_word_inst => impl.maskWordInst(),
+        .mask_word_inst => impl.maskWordInstruction(),
         .mask_addr_adl => impl.maskAddressAdl(),
-        .mask_addr_inst => impl.maskAddressInst(),
-
-        .fetch_byte => impl.fetchByte(),
-        .fetch_word => impl.fetchWord(),
+        .mask_addr_inst => impl.maskAddressInstruction(),
 
         .add_r_1 => impl.addR(1),
         .add_cc_1 => impl.addCycles(1),
 
         .dispatch_base => impl.dispatch(dispatcherFor(&base)),
 
-        .mode_sis => impl.setMode(.s, .is),
-        .mode_lis => impl.setMode(.l, .is),
-        .mode_sil => impl.setMode(.s, .il),
-        .mode_lil => impl.setMode(.l, .il),
+        .mode_sis => impl.setMode(.{ .inst = .s, .imm = .is }),
+        .mode_lis => impl.setMode(.{ .inst = .l, .imm = .is }),
+        .mode_sil => impl.setMode(.{ .inst = .s, .imm = .il }),
+        .mode_lil => impl.setMode(.{ .inst = .l, .imm = .il }),
+        .adl_inst => impl.setAdlInstruction(),
+        .adl_imm => impl.setAdlImmediate(),
+        .clear_ief, .set_ief => err: {
+            try impl.set(@boolToInt(uop == .set_ief));
+            try impl.storeRegister(.ief);
+            break :err impl.storeShadowRegister(.ief);
+        },
 
         .halt => impl.halt(),
 
-        .read_b => impl.readRegister(.b),
-        .read_c => impl.readRegister(.c),
-        .read_d => impl.readRegister(.d),
-        .read_e => impl.readRegister(.e),
-        .read_h => impl.readRegister(.h),
-        .read_l => impl.readRegister(.l),
-        .read_a => impl.readRegister(.a),
-        .read_af => impl.readRegister(.af),
-        .read_bc => impl.readRegister(.ubc),
-        .read_de => impl.readRegister(.ude),
-        .read_hl => impl.readRegister(.uhl),
-        .read_sp => impl.readStackPointer(),
-        .@"read_af'" => impl.readShadowRegister(.af),
-        .@"read_bc'" => impl.readShadowRegister(.bc),
-        .@"read_de'" => impl.readShadowRegister(.de),
-        .@"read_hl'" => impl.readShadowRegister(.hl),
+        .nz => impl.checkCondition(.zf, 0),
+        .z => impl.checkCondition(.zf, 1),
+        .nc => impl.checkCondition(.cf, 0),
+        .c => impl.checkCondition(.cf, 1),
+        .po => impl.checkCondition(.pv, 0),
+        .pe => impl.checkCondition(.pv, 1),
+        .p => impl.checkCondition(.sf, 0),
+        .m => impl.checkCondition(.sf, 1),
 
-        .write_b => impl.writeRegister(.b),
-        .write_c => impl.writeRegister(.c),
-        .write_d => impl.writeRegister(.d),
-        .write_e => impl.writeRegister(.e),
-        .write_h => impl.writeRegister(.h),
-        .write_l => impl.writeRegister(.l),
-        .write_a => impl.writeRegister(.a),
-        .write_af => impl.writeRegister(.af),
-        .write_bc => impl.writeRegister(.ubc),
-        .write_de => impl.writeRegister(.ude),
-        .write_hl => impl.writeRegister(.uhl),
-        .write_sp => impl.writeStackPointer(),
-        .@"write_af'" => impl.writeShadowRegister(.af),
-        .@"write_bc'" => impl.writeShadowRegister(.bc),
-        .@"write_de'" => impl.writeShadowRegister(.de),
-        .@"write_hl'" => impl.writeShadowRegister(.hl),
+        .load_a_high => impl.loadRegisterHigh(.a),
+        .load_b => impl.loadRegister(.b),
+        .load_c => impl.loadRegister(.c),
+        .load_d => impl.loadRegister(.d),
+        .load_e => impl.loadRegister(.e),
+        .load_h => impl.loadRegister(.h),
+        .load_l => impl.loadRegister(.l),
+        .load_a => impl.loadRegister(.a),
+        .load_af => impl.loadRegister(.af),
+        .load_bc => impl.loadRegister(.ubc),
+        .load_de => impl.loadRegister(.ude),
+        .load_hl => impl.loadRegister(.uhl),
+        .load_sp => impl.loadStackPointer(),
+        .load_pc => impl.loadShadowRegister(.pc),
+        .@"load_af'" => impl.loadShadowRegister(.af),
+        .@"load_bc'" => impl.loadShadowRegister(.ubc),
+        .@"load_de'" => impl.loadShadowRegister(.ude),
+        .@"load_hl'" => impl.loadShadowRegister(.uhl),
 
-        .load_byte => impl.loadByte(),
-        .load_word => impl.loadWord(),
+        .store_b => impl.storeRegister(.b),
+        .store_c => impl.storeRegister(.c),
+        .store_d => impl.storeRegister(.d),
+        .store_e => impl.storeRegister(.e),
+        .store_h => impl.storeRegister(.h),
+        .store_l => impl.storeRegister(.l),
+        .store_a => impl.storeRegister(.a),
+        .store_af => impl.storeRegister(.af),
+        .store_bc => impl.storeRegister(.ubc),
+        .store_de => impl.storeRegister(.ude),
+        .store_hl => impl.storeRegister(.uhl),
+        .store_sp => impl.storeStackPointer(),
+        .store_pc => impl.storeShadowRegister(.pc),
+        .@"store_af'" => impl.storeShadowRegister(.af),
+        .@"store_bc'" => impl.storeShadowRegister(.ubc),
+        .@"store_de'" => impl.storeShadowRegister(.ude),
+        .@"store_hl'" => impl.storeShadowRegister(.uhl),
 
-        .store_byte => impl.storeByte(),
-        .store_word => impl.storeWord(),
+        .flush => impl.flush(),
+        .fetch_byte => impl.fetchByte(.prefetch),
+        .fetch_word => impl.fetchWord(.prefetch),
+        .fetch_word_cached => impl.fetchWord(.cached),
+
+        .read_port => impl.readPortByte(),
+        .read_byte => impl.readMemoryByte(),
+        .read_word => impl.readMemoryWord(),
+
+        .write_port => impl.writePortByte(),
+        .write_byte => impl.writeMemoryByte(),
+        .write_word => impl.writeMemoryWord(),
 
         .inc_byte => impl.addByte(1),
         .dec_byte => impl.addByte(-1),
         .inc_word => impl.addWord(1),
         .dec_word => impl.addWord(-1),
         .add_words => impl.addWords(),
-    }
+    };
 }

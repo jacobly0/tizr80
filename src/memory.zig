@@ -29,7 +29,7 @@ pub fn deinit(self: *Memory, allocator: std.mem.Allocator) void {
     allocator.free(self.flash);
 }
 
-pub fn loadByte(self: *Memory, address: u24) u8 {
+pub fn readByte(self: *Memory, address: u24) u8 {
     return switch (address) {
         0x000000...0xCFFFFF => if (address < self.flash.len) self.flash[address] else undefined,
         ram_start...ram_start + self.ram.len - 1 => self.ram[address - ram_start],
@@ -40,7 +40,7 @@ pub fn loadByte(self: *Memory, address: u24) u8 {
         },
     };
 }
-pub fn storeByte(self: *Memory, address: u24, value: u8) void {
+pub fn writeByte(self: *Memory, address: u24, value: u8) void {
     switch (address) {
         ram_start...ram_start + self.ram.len - 1 => self.ram[address - ram_start] = value,
         0xE30800...0xE30BFF => self.cursor[address - 0xE30800] = value,
@@ -50,9 +50,32 @@ pub fn storeByte(self: *Memory, address: u24, value: u8) void {
         },
     }
 }
+pub fn readPortByte(self: *Memory, address: u16) u8 {
+    return switch (address) {
+        0x0020...0x0025 => self.port0[address - 0x0020],
+        0x4800...0x4BFF => self.cursor[address - 0x4800],
+        else => {
+            std.debug.print("\n0x{X:0>4}\n", .{address});
+            std.debug.todo("unimplemented");
+        },
+    };
+}
+pub fn writePortByte(self: *Memory, address: u16, value: u8) void {
+    switch (address) {
+        0x0020...0x0025 => self.port0[address - 0x0020] = value,
+        0x4800...0x4BFF => self.cursor[address - 0x4800] = value,
+        else => {
+            std.debug.print("\n0x{X:0>4}\n", .{address});
+            std.debug.todo("unimplemented");
+        },
+    }
+}
 
-pub fn loadCpuByte(self: *Memory, address: u24) u8 {
-    @fieldParentPtr(CEmuCore, "mem", self).cpu.cycles += switch (address) {
+fn addCC(self: *Memory, increment: u64) void {
+    @fieldParentPtr(CEmuCore, "mem", self).cpu.cycles +%= increment;
+}
+pub fn readCpuByte(self: *Memory, address: u24) u8 {
+    self.addCC(switch (address) {
         0x000000...0xCFFFFF => if (address < self.flash.len) 10 else 258,
         ram_start...ram_start + self.ram.len - 1 => 4,
         0xE30800...0xE30BFF => 3,
@@ -60,17 +83,39 @@ pub fn loadCpuByte(self: *Memory, address: u24) u8 {
             std.debug.print("\n0x{X:0>6}\n", .{address});
             std.debug.todo("unimplemented");
         },
-    };
-    return self.loadByte(address);
+    });
+    return self.readByte(address);
 }
-pub fn storeCpuByte(self: *Memory, address: u24, value: u8) void {
-    @fieldParentPtr(CEmuCore, "mem", self).cpu.cycles += switch (address) {
+pub fn writeCpuByte(self: *Memory, address: u24, value: u8) void {
+    self.addCC(switch (address) {
         ram_start...ram_start + self.ram.len - 1 => 2,
         0xE30800...0xE30BFF => 2,
         else => {
             std.debug.print("\n0x{X:0>6}\n", .{address});
             std.debug.todo("unimplemented");
         },
-    };
-    self.storeByte(address, value);
+    });
+    self.writeByte(address, value);
+}
+pub fn readCpuPortByte(self: *Memory, address: u16) u8 {
+    self.addCC(switch (address) {
+        0x0020...0x0025 => 2,
+        0x4800...0x4BFF => 3,
+        else => {
+            std.debug.print("\n0x{X:0>4}\n", .{address});
+            std.debug.todo("unimplemented");
+        },
+    });
+    return self.readPortByte(address);
+}
+pub fn writeCpuPortByte(self: *Memory, address: u16, value: u8) void {
+    self.addCC(switch (address) {
+        0x0020...0x0025 => 2,
+        0x4800...0x4BFF => 2,
+        else => {
+            std.debug.print("\n0x{X:0>4}\n", .{address});
+            std.debug.todo("unimplemented");
+        },
+    });
+    self.writePortByte(address, value);
 }

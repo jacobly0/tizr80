@@ -8,16 +8,13 @@ pub fn create(allocator: std.mem.Allocator) !*Cpu.Backend {
     errdefer allocator.destroy(backend);
 
     backend.* = .{
-        .flush = flush,
-        .step = step,
+        .execute = execute,
         .destroy = destroy,
     };
     return backend;
 }
 
-fn flush(_: *Cpu.Backend, _: *CEmuCore) void {}
-
-fn step(_: *Cpu.Backend, _: *CEmuCore) void {}
+fn execute(_: *Cpu.Backend, _: *CEmuCore, _: Cpu.ExecuteMode) void {}
 
 fn destroy(backend: *Cpu.Backend, allocator: std.mem.Allocator) void {
     allocator.destroy(backend);

@@ -77,7 +77,6 @@ pub const cemucore_transfer = enum(c_int) {
 pub const cemucore_reg = enum(c_int) {
     // 1-bit state
     CEMUCORE_STATE_ADL,
-    CEMUCORE_STATE_MADL,
     CEMUCORE_STATE_IEF,
 
     // 1-bit flags
@@ -129,7 +128,6 @@ pub const cemucore_reg = enum(c_int) {
     CEMUCORE_REG_UIY,
     CEMUCORE_REG_SPL,
     CEMUCORE_REG_PC,
-    CEMUCORE_REG_RPC,
 };
 
 pub usingnamespace if (CEMUCORE_DEBUGGER) struct {

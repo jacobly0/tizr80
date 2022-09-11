@@ -74,7 +74,6 @@ typedef enum cemucore_transfer {
 typedef enum cemucore_reg {
     /* 1-bit state */
     CEMUCORE_STATE_ADL,
-    CEMUCORE_STATE_MADL,
     CEMUCORE_STATE_IEF,
 
     /* 1-bit flags */
@@ -126,7 +125,6 @@ typedef enum cemucore_reg {
     CEMUCORE_REG_UIY,
     CEMUCORE_REG_SPL,
     CEMUCORE_REG_PC,
-    CEMUCORE_REG_RPC,
 } cemucore_reg_t;
 
 #if CEMUCORE_DEBUGGER

@@ -162,7 +162,7 @@ fn getRaw(self: *CEmuCore, property: Property, address: u24) ?u24 {
             }
         } else unreachable,
         .Key => self.keypad.getKey(@intCast(u8, address)),
-        .Ram => self.mem.loadByte(Memory.ram_start + @as(u24, @intCast(u19, address))),
+        .Ram => self.mem.readByte(Memory.ram_start + @as(u24, @intCast(u19, address))),
         .GpioEnable => self.keypad.getGpio(@intCast(u5, address)),
         else => std.debug.todo("unimplemented"),
     };
@@ -199,7 +199,7 @@ fn setRaw(self: *CEmuCore, property: Property, address: u24, value: ?u24) void {
                 const register_address = @field(RegisterAddress, field.name);
                 const truncated_value = @intCast(Cpu.RegisterType(register_address), value.?);
                 switch (register_address) {
-                    .adl, .pc => if (truncated_value != self.cpu.get(register_address))
+                    .pc => if (truncated_value != self.cpu.get(register_address))
                         self.cpu.needFlush(),
                     else => {},
                 }
@@ -216,7 +216,7 @@ fn setRaw(self: *CEmuCore, property: Property, address: u24, value: ?u24) void {
             }
         },
         .Key => self.keypad.setKey(@intCast(u8, address), @intCast(u1, value.?)),
-        .Ram => self.mem.storeByte(Memory.ram_start + @as(u24, @intCast(u19, address)), @intCast(u8, value.?)),
+        .Ram => self.mem.writeByte(Memory.ram_start + @as(u24, @intCast(u19, address)), @intCast(u8, value.?)),
         .GpioEnable => self.keypad.setGpio(@intCast(u5, address), @intCast(u1, value.?)),
         else => std.debug.todo("unimplemented"),
     }
