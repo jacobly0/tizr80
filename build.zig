@@ -3,6 +3,13 @@ const std = @import("std");
 pub fn build(b: *std.build.Builder) !void {
     const project_name = std.fs.path.basename(b.build_root);
 
+    const max_supported_glibc_version = std.builtin.Version{ .major = 2, .minor = 34, .patch = 0 };
+    const target = if (b.host.target.isGnuLibC() and
+        b.host.target.os.version_range.linux.glibc.order(max_supported_glibc_version).compare(.gt))
+    target: {
+        break :target std.zig.CrossTarget{ .glibc_version = max_supported_glibc_version };
+    } else null;
+
     const mode = b.standardReleaseOptions();
     const debug_mode = b.option(bool, "debug", "Optimizations off and safety on") orelse false;
     const debugger = b.option(
@@ -59,6 +66,7 @@ pub fn build(b: *std.build.Builder) !void {
     });
 
     const main_tests = b.addTest(b.fmt("src/{s}.zig", .{project_name}));
+    if (target) |cross_target| main_tests.setTarget(cross_target);
     main_tests.setBuildMode(mode);
     main_tests.setFilter(test_filter);
     main_tests.addOptions("options", options);
@@ -75,6 +83,7 @@ pub fn build(b: *std.build.Builder) !void {
     inline for (@typeInfo(@TypeOf(libraries)).Struct.fields) |field| {
         const library = @field(libraries, field.name);
         library.strip = strip;
+        if (target) |cross_target| library.setTarget(cross_target);
         library.setBuildMode(mode);
         library.addOptions("options", options);
         library.linkLibC();
@@ -82,6 +91,7 @@ pub fn build(b: *std.build.Builder) !void {
         library.step.dependOn(fmt_step);
 
         const test_api = b.addExecutable("test-capi-" ++ field.name, null);
+        if (target) |cross_target| test_api.setTarget(cross_target);
         switch (mode) {
             .Debug => {},
             .ReleaseSafe, .ReleaseFast, .ReleaseSmall => test_api.defineCMacro("NDEBUG", null),
