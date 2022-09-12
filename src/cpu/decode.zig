@@ -144,6 +144,14 @@ const Uop = enum {
     call,
     ret,
 
+    rlca_byte,
+    rrca_byte,
+    rla_byte,
+    rra_byte,
+    daa_byte,
+    cpl_byte,
+    scf,
+    ccf,
     inc_byte,
     dec_byte,
     inc_word,
@@ -171,7 +179,7 @@ const base = [_][]const Uop{
     &[_]Uop{ .load_b, .inc_byte, .store_b }, // inc b
     &[_]Uop{ .load_b, .dec_byte, .store_b }, // dec b
     &[_]Uop{ .fetch_byte, .store_b }, // ld b,n
-    &[_]Uop{.unimplemented}, // rlca
+    &[_]Uop{ .load_a, .rlca_byte, .store_a }, // rlca
     &[_]Uop{ .load_af, .@"ex_af'", .store_af }, // ex af,af'
     &[_]Uop{ .load_bc, .save, .load_hl, .add_words, .store_hl }, // add hl,bc
     &[_]Uop{ .load_bc, .save, .mask_addr_inst, .read_byte, .store_a }, // ld a,(bc)
@@ -179,7 +187,7 @@ const base = [_][]const Uop{
     &[_]Uop{ .load_c, .inc_byte, .store_c }, // inc c
     &[_]Uop{ .load_c, .dec_byte, .store_c }, // dec c
     &[_]Uop{ .fetch_byte, .store_c }, // ld c,n
-    &[_]Uop{.unimplemented}, // rrca
+    &[_]Uop{ .load_a, .rrca_byte, .store_a }, // rrca
     &[_]Uop{ .fetch_byte, .save, .load_b, .dec_word, .store_b, .non_zero, .flush, .add_cc_1, .load_pc, .dec_word, .add_offset, .mask_word_inst, .store_pc }, // djnz d
     &[_]Uop{ .fetch_word, .mask_word_inst, .store_de }, // ld de,nn
     &[_]Uop{ .load_de, .save, .mask_addr_inst, .load_a, .write_byte }, // ld (de),a
@@ -187,7 +195,7 @@ const base = [_][]const Uop{
     &[_]Uop{ .load_d, .inc_byte, .store_d }, // inc d
     &[_]Uop{ .load_d, .dec_byte, .store_d }, // dec d
     &[_]Uop{ .fetch_byte, .store_d }, // ld d,n
-    &[_]Uop{.unimplemented}, // rla
+    &[_]Uop{ .load_a, .rla_byte, .store_a }, // rla
     &[_]Uop{ .fetch_byte, .save, .flush, .load_pc, .dec_word, .add_offset, .mask_word_inst, .store_pc }, // jr d
     &[_]Uop{ .load_de, .save, .load_hl, .add_words, .store_hl }, // add hl,de
     &[_]Uop{ .load_de, .save, .mask_addr_inst, .read_byte, .store_a }, // ld a,(de)
@@ -195,7 +203,7 @@ const base = [_][]const Uop{
     &[_]Uop{ .load_e, .inc_byte, .store_e }, // inc e
     &[_]Uop{ .load_e, .dec_byte, .store_e }, // dec e
     &[_]Uop{ .fetch_byte, .store_e }, // ld e,n
-    &[_]Uop{.unimplemented}, // rra
+    &[_]Uop{ .load_a, .rra_byte, .store_a }, // rra
     &[_]Uop{ .fetch_byte, .nz, .flush, .add_cc_1, .save, .load_pc, .dec_word, .add_offset, .mask_word_inst, .store_pc }, // jr nz,d
     &[_]Uop{ .fetch_word, .mask_word_inst, .store_hl }, // ld hl,nn
     &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .load_hl, .write_word }, // ld (nn),hl
@@ -203,7 +211,7 @@ const base = [_][]const Uop{
     &[_]Uop{ .load_h, .inc_byte, .store_h }, // inc h
     &[_]Uop{ .load_h, .dec_byte, .store_h }, // dec h
     &[_]Uop{ .fetch_byte, .store_h }, // ld h,n
-    &[_]Uop{.unimplemented}, // daa
+    &[_]Uop{ .load_a, .daa_byte, .store_a }, // daa
     &[_]Uop{ .fetch_byte, .z, .flush, .add_cc_1, .save, .load_pc, .dec_word, .add_offset, .mask_word_inst, .store_pc }, // jr z,d
     &[_]Uop{ .load_hl, .save, .add_words, .store_hl }, // add hl,hl
     &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .read_word, .store_hl }, // ld hl,(nn)
@@ -211,7 +219,7 @@ const base = [_][]const Uop{
     &[_]Uop{ .load_l, .inc_byte, .store_l }, // inc l
     &[_]Uop{ .load_l, .dec_byte, .store_l }, // dec l
     &[_]Uop{ .fetch_byte, .store_l }, // ld l,n
-    &[_]Uop{.unimplemented}, // cpl
+    &[_]Uop{ .load_a, .cpl_byte, .store_a }, // cpl
     &[_]Uop{ .fetch_byte, .nc, .flush, .add_cc_1, .save, .load_pc, .dec_word, .add_offset, .mask_word_inst, .store_pc }, // jr nc,d
     &[_]Uop{ .fetch_word, .save, .store_sp }, // ld sp,nn
     &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .load_a, .write_byte }, // ld (nn),a
@@ -219,7 +227,7 @@ const base = [_][]const Uop{
     &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .add_cc_1, .inc_byte, .write_byte }, // inc (hl)
     &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .add_cc_1, .dec_byte, .write_byte }, // dec (hl)
     &[_]Uop{ .load_hl, .save, .mask_addr_inst, .fetch_byte, .write_byte }, // ld (hl),n
-    &[_]Uop{.unimplemented}, // scf
+    &[_]Uop{.scf}, // scf
     &[_]Uop{ .fetch_byte, .c, .flush, .save, .add_cc_1, .load_pc, .dec_word, .add_offset, .mask_word_inst, .store_pc }, // jr c,d
     &[_]Uop{ .load_sp, .load_hl, .add_words, .store_hl }, // add hl,sp
     &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .read_byte, .store_a }, // ld a,(nn)
@@ -227,7 +235,7 @@ const base = [_][]const Uop{
     &[_]Uop{ .load_a, .inc_byte, .store_a }, // inc a
     &[_]Uop{ .load_a, .dec_byte, .store_a }, // dec a
     &[_]Uop{ .fetch_byte, .store_a }, // ld a,n
-    &[_]Uop{.unimplemented}, // ccf
+    &[_]Uop{.ccf}, // ccf
     &[_]Uop{ .mode_sis, .add_r_1, .fetch_byte, .dispatch_base }, // .sis
     &[_]Uop{ .load_c, .store_b }, // ld b,c
     &[_]Uop{ .load_d, .store_b }, // ld b,d
@@ -549,6 +557,14 @@ fn dispatch(impl: anytype, comptime uop: Uop) anyerror!void {
         .call => impl.callSuffix(),
         .ret => impl.ret(),
 
+        .rlca_byte => impl.rlcaByte(),
+        .rrca_byte => impl.rrcaByte(),
+        .rla_byte => impl.rlaByte(),
+        .rra_byte => impl.rraByte(),
+        .daa_byte => impl.daaByte(),
+        .cpl_byte => impl.cplByte(),
+        .scf => impl.scf(),
+        .ccf => impl.ccf(),
         .inc_byte => impl.addByte(1),
         .dec_byte => impl.addByte(-1),
         .inc_word => impl.addWord(1),

@@ -472,6 +472,76 @@ const State = struct {
         }
     }
 
+    pub fn rlcaByte(self: *State) error{}!void {
+        const byte = @intCast(u8, self.accumulator);
+        self.core.cpu.set(.cf, @truncate(u1, byte >> 7));
+        self.core.cpu.nf = false;
+        self.core.cpu.hc = false;
+        self.accumulator = std.math.rotl(u8, byte, 1);
+    }
+    pub fn rrcaByte(self: *State) error{}!void {
+        const byte = @intCast(u8, self.accumulator);
+        self.core.cpu.set(.cf, @truncate(u1, byte >> 0));
+        self.core.cpu.nf = false;
+        self.core.cpu.hc = false;
+        self.accumulator = std.math.rotr(u8, byte, 1);
+    }
+    pub fn rlaByte(self: *State) error{}!void {
+        const carry = self.core.cpu.get(.cf);
+        const byte = @intCast(u8, self.accumulator);
+        self.core.cpu.set(.cf, @truncate(u1, byte >> 7));
+        self.core.cpu.nf = false;
+        self.core.cpu.hc = false;
+        self.accumulator = byte << 1 | @as(u8, carry) << 0;
+    }
+    pub fn rraByte(self: *State) error{}!void {
+        const carry = self.core.cpu.get(.cf);
+        const byte = @intCast(u8, self.accumulator);
+        self.core.cpu.set(.cf, @truncate(u1, byte >> 0));
+        self.core.cpu.nf = false;
+        self.core.cpu.hc = false;
+        self.accumulator = byte >> 1 | @as(u8, carry) << 7;
+    }
+    pub fn daaByte(self: *State) error{}!void {
+        const byte = @intCast(u8, self.accumulator);
+        const low = @truncate(u4, byte);
+
+        const low_offset: u4 = if (self.core.cpu.hc or low > 0x9) 0x10 - 0xA else 0;
+
+        if (@as(u9, byte) + low_offset >> 4 > 0x9) self.core.cpu.cf = true;
+        const high_offset: u8 = if (self.core.cpu.cf) 0x10 - 0xA else 0;
+
+        const offset = high_offset << 4 | low_offset;
+        var result: u8 = undefined;
+        var low_result: u4 = undefined;
+        if (self.core.cpu.nf) {
+            result = byte -% offset;
+            self.core.cpu.hc = @subWithOverflow(u4, low, low_offset, &low_result);
+        } else {
+            result = byte +% offset;
+            self.core.cpu.hc = @addWithOverflow(u4, low, low_offset, &low_result);
+        }
+        self.core.cpu.pv = @popCount(result) & 1 == 0;
+        self.core.cpu.zf = result == 0;
+        self.core.cpu.sf = @bitCast(i8, result) < 0;
+        self.accumulator = result;
+    }
+    pub fn cplByte(self: *State) error{}!void {
+        self.core.cpu.nf = true;
+        self.core.cpu.hc = true;
+        self.accumulator = ~@intCast(u8, self.accumulator);
+    }
+    fn setCarry(self: *State, value: bool) void {
+        self.core.cpu.cf = value;
+        self.core.cpu.nf = false;
+        self.core.cpu.hc = !value;
+    }
+    pub fn scf(self: *State) error{}!void {
+        self.setCarry(true);
+    }
+    pub fn ccf(self: *State) error{}!void {
+        self.setCarry(!self.core.cpu.cf);
+    }
     pub fn addByte(self: *State, comptime rhs: comptime_int) error{}!void {
         const unsigned_lhs = @intCast(u8, self.accumulator);
         const signed_rhs: i8 = rhs;
@@ -482,10 +552,10 @@ const State = struct {
         var signed_result: i8 = undefined;
         self.core.cpu.pv = @addWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
 
-        const half_lhs = @truncate(u4, unsigned_lhs);
-        const half_rhs = @truncate(u4, unsigned_rhs);
-        var half_result: u4 = undefined;
-        self.core.cpu.hc = @addWithOverflow(u4, half_lhs, half_rhs, &half_result) != self.core.cpu.nf;
+        const low_lhs = @truncate(u4, unsigned_lhs);
+        const low_rhs = @truncate(u4, unsigned_rhs);
+        var low_result: u4 = undefined;
+        self.core.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) != self.core.cpu.nf;
 
         self.core.cpu.zf = signed_result == 0;
         self.core.cpu.sf = signed_result < 0;
@@ -517,10 +587,10 @@ const State = struct {
         var signed_result: i8 = undefined;
         self.core.cpu.pv = @addWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
 
-        const half_lhs = @truncate(u4, unsigned_lhs);
-        const half_rhs = @truncate(u4, unsigned_rhs);
-        var half_result: u4 = undefined;
-        self.core.cpu.hc = @addWithOverflow(u4, half_lhs, half_rhs, &half_result);
+        const low_lhs = @truncate(u4, unsigned_lhs);
+        const low_rhs = @truncate(u4, unsigned_rhs);
+        var low_result: u4 = undefined;
+        self.core.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result);
 
         self.core.cpu.zf = unsigned_result == 0;
         self.core.cpu.sf = signed_result < 0;
@@ -542,11 +612,11 @@ const State = struct {
         const signed_result = signed_lhs +% signed_rhs +% carry;
         self.core.cpu.pv = signed_result != @as(i9, signed_lhs) + signed_rhs + carry;
 
-        const half_lhs = @truncate(u4, unsigned_lhs);
-        const half_rhs = @truncate(u4, unsigned_rhs);
-        var half_result: u4 = undefined;
-        self.core.cpu.hc = @addWithOverflow(u4, half_lhs, half_rhs, &half_result) or
-            @addWithOverflow(u4, half_result, carry, &half_result);
+        const low_lhs = @truncate(u4, unsigned_lhs);
+        const low_rhs = @truncate(u4, unsigned_rhs);
+        var low_result: u4 = undefined;
+        self.core.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) or
+            @addWithOverflow(u4, low_result, carry, &low_result);
 
         self.core.cpu.zf = unsigned_result == 0;
         self.core.cpu.sf = signed_result < 0;
@@ -565,10 +635,10 @@ const State = struct {
         var signed_result: i8 = undefined;
         self.core.cpu.pv = @subWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
 
-        const half_lhs = @truncate(u4, unsigned_lhs);
-        const half_rhs = @truncate(u4, unsigned_rhs);
-        var half_result: u4 = undefined;
-        self.core.cpu.hc = @subWithOverflow(u4, half_lhs, half_rhs, &half_result);
+        const low_lhs = @truncate(u4, unsigned_lhs);
+        const low_rhs = @truncate(u4, unsigned_rhs);
+        var low_result: u4 = undefined;
+        self.core.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result);
 
         self.core.cpu.zf = unsigned_result == 0;
         self.core.cpu.sf = signed_result < 0;
@@ -590,11 +660,11 @@ const State = struct {
         const signed_result = signed_lhs -% signed_rhs -% carry;
         self.core.cpu.pv = signed_result != @as(i9, signed_lhs) - signed_rhs - carry;
 
-        const half_lhs = @truncate(u4, unsigned_lhs);
-        const half_rhs = @truncate(u4, unsigned_rhs);
-        var half_result: u4 = undefined;
-        self.core.cpu.hc = @subWithOverflow(u4, half_lhs, half_rhs, &half_result) or
-            @subWithOverflow(u4, half_result, carry, &half_result);
+        const low_lhs = @truncate(u4, unsigned_lhs);
+        const low_rhs = @truncate(u4, unsigned_rhs);
+        var low_result: u4 = undefined;
+        self.core.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result) or
+            @subWithOverflow(u4, low_result, carry, &low_result);
 
         self.core.cpu.zf = unsigned_result == 0;
         self.core.cpu.sf = signed_result < 0;
@@ -648,10 +718,10 @@ const State = struct {
 
         self.core.cpu.nf = false;
 
-        const half_lhs = @truncate(u12, lhs);
-        const half_rhs = @truncate(u12, rhs);
-        var half_result: u12 = undefined;
-        self.core.cpu.hc = @addWithOverflow(u12, half_lhs, half_rhs, &half_result);
+        const low_lhs = @truncate(u12, lhs);
+        const low_rhs = @truncate(u12, rhs);
+        var low_result: u12 = undefined;
+        self.core.cpu.hc = @addWithOverflow(u12, low_lhs, low_rhs, &low_result);
 
         self.accumulator = result;
     }
