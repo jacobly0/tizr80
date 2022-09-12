@@ -14,7 +14,7 @@ pub const Backend = struct {
     destroy: *const fn (*Backend, std.mem.Allocator) void,
 };
 
-pub const RegisterAddress = enum {
+pub const RegisterId = enum {
     // 1-bit state
     adl,
     ief,
@@ -142,8 +142,8 @@ cycles: u64 = 0,
 
 backend: *Backend,
 
-pub fn RegisterType(comptime address: RegisterAddress) type {
-    return switch (address) {
+pub fn RegisterType(comptime id: RegisterId) type {
+    return switch (id) {
         .adl, .ief, .cf, .nf, .pv, .xf, .hc, .yf, .zf, .sf => u1,
         .f, .a, .c, .b, .bcu, .e, .d, .deu, .l, .h, .hlu, .ixl, .ixh, .ixu, .iyl, .iyh, .iyu, .r, .mb => u8,
         .af, .bc, .de, .hl, .ix, .iy, .sps, .i => u16,
@@ -151,8 +151,8 @@ pub fn RegisterType(comptime address: RegisterAddress) type {
     };
 }
 
-pub fn get(self: *const Cpu, comptime address: RegisterAddress) RegisterType(address) {
-    return switch (address) {
+pub fn get(self: *const Cpu, comptime id: RegisterId) RegisterType(id) {
+    return switch (id) {
         // 1-bit state
         .adl => @enumToInt(self.mode.adl),
         .ief => @boolToInt(self.ief1),
@@ -218,8 +218,8 @@ pub fn get(self: *const Cpu, comptime address: RegisterAddress) RegisterType(add
     };
 }
 
-pub fn getShadow(self: *const Cpu, comptime address: RegisterAddress) RegisterType(address) {
-    return switch (address) {
+pub fn getShadow(self: *const Cpu, comptime id: RegisterId) RegisterType(id) {
+    return switch (id) {
         // 1-bit state
         .adl => @enumToInt(self.mode.madl),
         .ief => @boolToInt(self.ief2),
@@ -264,8 +264,8 @@ pub fn getShadow(self: *const Cpu, comptime address: RegisterAddress) RegisterTy
     };
 }
 
-pub fn set(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(address)) void {
-    switch (address) {
+pub fn set(self: *Cpu, comptime id: RegisterId, value: RegisterType(id)) void {
+    switch (id) {
         // 1-bit state
         .adl => self.mode.adl = @intToEnum(Adl, value),
         .ief => {
@@ -338,8 +338,8 @@ pub fn set(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(ad
     }
 }
 
-pub fn setShadow(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(address)) void {
-    switch (address) {
+pub fn setShadow(self: *Cpu, comptime id: RegisterId, value: RegisterType(id)) void {
+    switch (id) {
         // 1-bit state
         .adl => self.mode.madl = @intToEnum(Adl, value),
         .ief => self.ief2 = value != 0,

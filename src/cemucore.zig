@@ -82,8 +82,6 @@ pub const TransferAddress = enum {
     Error,
 };
 
-pub const RegisterAddress = Cpu.RegisterAddress;
-
 pub const SignalHandler = ?*const fn (*CEmuCore, Signal) void;
 
 const CEmuCore = @This();
@@ -151,14 +149,14 @@ fn IntTypeForBuffer(buffer: []const u8) type {
 
 fn getRaw(self: *CEmuCore, property: Property, address: u24) ?u24 {
     return switch (property) {
-        .Reg => inline for (@typeInfo(RegisterAddress).Enum.fields) |field| {
+        .Reg => inline for (@typeInfo(Cpu.RegisterId).Enum.fields) |field| {
             if (address == field.value) {
-                break self.cpu.get(@field(RegisterAddress, field.name));
+                break self.cpu.get(@field(Cpu.RegisterId, field.name));
             }
         } else unreachable,
-        .RegShadow => inline for (@typeInfo(RegisterAddress).Enum.fields) |field| {
+        .RegShadow => inline for (@typeInfo(Cpu.RegisterId).Enum.fields) |field| {
             if (address == field.value) {
-                break self.cpu.getShadow(@field(RegisterAddress, field.name));
+                break self.cpu.getShadow(@field(Cpu.RegisterId, field.name));
             }
         } else unreachable,
         .Key => self.keypad.getKey(@intCast(u8, address)),
@@ -194,24 +192,23 @@ pub fn getSlice(self: *CEmuCore, property: Property, address: u24, buffer: []u8)
 }
 fn setRaw(self: *CEmuCore, property: Property, address: u24, value: ?u24) void {
     switch (property) {
-        .Reg => inline for (@typeInfo(RegisterAddress).Enum.fields) |field| {
+        .Reg => inline for (@typeInfo(Cpu.RegisterId).Enum.fields) |field| {
             if (address == field.value) {
-                const register_address = @field(RegisterAddress, field.name);
-                const truncated_value = @intCast(Cpu.RegisterType(register_address), value.?);
-                switch (register_address) {
-                    .pc => if (truncated_value != self.cpu.get(register_address))
-                        self.cpu.needFlush(),
+                const register_id = @field(Cpu.RegisterId, field.name);
+                const register_value = @intCast(Cpu.RegisterType(register_id), value.?);
+                switch (register_id) {
+                    .pc => if (register_value != self.cpu.get(register_id)) self.cpu.needFlush(),
                     else => {},
                 }
-                self.cpu.set(register_address, truncated_value);
+                self.cpu.set(register_id, register_value);
                 break;
             }
         } else unreachable,
-        .RegShadow => inline for (@typeInfo(RegisterAddress).Enum.fields) |field| {
+        .RegShadow => inline for (@typeInfo(Cpu.RegisterId).Enum.fields) |field| {
             if (address == field.value) {
-                const register_address = @field(RegisterAddress, field.name);
-                const truncated_value = @intCast(Cpu.RegisterType(register_address), value.?);
-                self.cpu.setShadow(register_address, truncated_value);
+                const register_id = @field(Cpu.RegisterId, field.name);
+                const register_value = @intCast(Cpu.RegisterType(register_id), value.?);
+                self.cpu.setShadow(register_id, register_value);
                 break;
             }
         },

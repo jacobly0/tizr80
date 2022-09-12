@@ -230,20 +230,20 @@ const State = struct {
     }
     pub fn checkCondition(
         self: *State,
-        comptime address: Cpu.RegisterAddress,
+        comptime id: Cpu.RegisterId,
         comptime value: bool,
     ) error{ConditionFailed}!void {
-        if (self.core.cpu.get(address) != @boolToInt(value)) return error.ConditionFailed;
+        if (self.core.cpu.get(id) != @boolToInt(value)) return error.ConditionFailed;
     }
 
-    pub fn loadRegister(self: *State, comptime address: Cpu.RegisterAddress) error{}!void {
-        self.accumulator = self.core.cpu.get(address);
+    pub fn loadRegister(self: *State, comptime id: Cpu.RegisterId) error{}!void {
+        self.accumulator = self.core.cpu.get(id);
     }
-    pub fn loadRegisterHigh(self: *State, comptime address: Cpu.RegisterAddress) error{}!void {
-        self.accumulator |= @as(i32, self.core.cpu.get(address)) << 8;
+    pub fn loadRegisterHigh(self: *State, comptime id: Cpu.RegisterId) error{}!void {
+        self.accumulator |= @as(i32, self.core.cpu.get(id)) << 8;
     }
-    pub fn loadShadowRegister(self: *State, comptime address: Cpu.RegisterAddress) error{}!void {
-        self.accumulator = self.core.cpu.getShadow(address);
+    pub fn loadShadowRegister(self: *State, comptime id: Cpu.RegisterId) error{}!void {
+        self.accumulator = self.core.cpu.getShadow(id);
     }
     fn loadStackPointer(self: *State, mode: decode.Mode.Instruction) void {
         switch (mode) {
@@ -258,17 +258,11 @@ const State = struct {
         self.loadStackPointer(self.mode.inst);
     }
 
-    pub fn storeRegister(self: *State, comptime address: Cpu.RegisterAddress) error{}!void {
-        self.core.cpu.set(
-            address,
-            @truncate(Cpu.RegisterType(address), @intCast(u24, self.accumulator)),
-        );
+    pub fn storeRegister(self: *State, comptime id: Cpu.RegisterId) error{}!void {
+        self.core.cpu.set(id, @truncate(Cpu.RegisterType(id), @intCast(u24, self.accumulator)));
     }
-    pub fn storeShadowRegister(self: *State, comptime address: Cpu.RegisterAddress) error{}!void {
-        self.core.cpu.setShadow(
-            address,
-            @truncate(Cpu.RegisterType(address), @intCast(u24, self.accumulator)),
-        );
+    pub fn storeShadowRegister(self: *State, comptime id: Cpu.RegisterId) error{}!void {
+        self.core.cpu.setShadow(id, @truncate(Cpu.RegisterType(id), @intCast(u24, self.accumulator)));
     }
     fn storeStackPointer(self: *State, mode: decode.Mode.Instruction) void {
         switch (mode) {
@@ -283,28 +277,28 @@ const State = struct {
         self.storeStackPointer(self.mode.inst);
     }
 
-    pub fn exchangeRegister(self: *State, comptime address: Cpu.RegisterAddress) error{}!void {
+    pub fn exchangeRegister(self: *State, comptime id: Cpu.RegisterId) error{}!void {
         var temp = self.accumulator;
-        try self.loadRegister(address);
+        try self.loadRegister(id);
         std.mem.swap(i32, &self.accumulator, &temp);
-        try self.storeRegister(address);
+        try self.storeRegister(id);
         self.accumulator = temp;
     }
     pub fn exchangeRegisterInstruction(
         self: *State,
-        comptime partial_address: Cpu.RegisterAddress,
-        comptime full_address: Cpu.RegisterAddress,
+        comptime partial: Cpu.RegisterId,
+        comptime full: Cpu.RegisterId,
     ) error{}!void {
         try switch (self.mode.inst) {
-            .s => self.exchangeRegister(partial_address),
-            .l => self.exchangeRegister(full_address),
+            .s => self.exchangeRegister(partial),
+            .l => self.exchangeRegister(full),
         };
     }
-    pub fn exchangeShadowRegister(self: *State, comptime address: Cpu.RegisterAddress) error{}!void {
+    pub fn exchangeShadowRegister(self: *State, comptime id: Cpu.RegisterId) error{}!void {
         var temp = self.accumulator;
-        try self.loadShadowRegister(address);
+        try self.loadShadowRegister(id);
         std.mem.swap(i32, &self.accumulator, &temp);
-        try self.storeShadowRegister(address);
+        try self.storeShadowRegister(id);
         self.accumulator = temp;
     }
 
