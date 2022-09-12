@@ -78,14 +78,14 @@ const Mode = packed struct(u2) {
 };
 
 pub const Flags = packed struct(u8) {
-    cf: u1,
-    nf: u1,
-    pv: u1,
-    xf: u1,
-    hc: u1,
-    yf: u1,
-    zf: u1,
-    sf: u1,
+    cf: bool,
+    nf: bool,
+    pv: bool,
+    xf: bool,
+    hc: bool,
+    yf: bool,
+    zf: bool,
+    sf: bool,
 };
 
 const u8u8 = packed struct(u16) {
@@ -104,14 +104,14 @@ pub const u8u16 = packed struct(u24) {
     upper: u8,
 };
 
-cf: u1 = 0,
-nf: u1 = 0,
-pv: u1 = 0,
-xf: u1 = 0,
-hc: u1 = 0,
-yf: u1 = 0,
-zf: u1 = 0,
-sf: u1 = 0,
+cf: bool = false,
+nf: bool = false,
+pv: bool = false,
+xf: bool = false,
+hc: bool = false,
+yf: bool = false,
+zf: bool = false,
+sf: bool = false,
 
 a: u8 = 0,
 bc: u24 = 0,
@@ -135,8 +135,8 @@ mbi: u24 = 0,
 
 mode: Mode = .{ .adl = .z80, .madl = .z80 },
 
-ief1: u1 = 0,
-ief2: u1 = 0,
+ief1: bool = false,
+ief2: bool = false,
 
 cycles: u64 = 0,
 
@@ -155,28 +155,28 @@ pub fn get(self: *const Cpu, comptime address: RegisterAddress) RegisterType(add
     return switch (address) {
         // 1-bit state
         .adl => @enumToInt(self.mode.adl),
-        .ief => self.ief1,
+        .ief => @boolToInt(self.ief1),
 
         // 1-bit flags
-        .cf => self.cf,
-        .nf => self.nf,
-        .pv => self.pv,
-        .xf => self.xf,
-        .hc => self.hc,
-        .yf => self.yf,
-        .zf => self.zf,
-        .sf => self.sf,
+        .cf => @boolToInt(self.cf),
+        .nf => @boolToInt(self.nf),
+        .pv => @boolToInt(self.pv),
+        .xf => @boolToInt(self.xf),
+        .hc => @boolToInt(self.hc),
+        .yf => @boolToInt(self.yf),
+        .zf => @boolToInt(self.zf),
+        .sf => @boolToInt(self.sf),
 
         // 8-bit registers
         .f => util.toBacking(Flags{
-            .cf = self.get(.cf),
-            .nf = self.get(.nf),
-            .pv = self.get(.pv),
-            .xf = self.get(.xf),
-            .hc = self.get(.hc),
-            .yf = self.get(.yf),
-            .zf = self.get(.zf),
-            .sf = self.get(.sf),
+            .cf = self.get(.cf) != 0,
+            .nf = self.get(.nf) != 0,
+            .pv = self.get(.pv) != 0,
+            .xf = self.get(.xf) != 0,
+            .hc = self.get(.hc) != 0,
+            .yf = self.get(.yf) != 0,
+            .zf = self.get(.zf) != 0,
+            .sf = self.get(.sf) != 0,
         }),
         .a => self.a,
         .c => util.fromBacking(u8u8u8, self.get(.ubc)).low,
@@ -222,17 +222,17 @@ pub fn getShadow(self: *const Cpu, comptime address: RegisterAddress) RegisterTy
     return switch (address) {
         // 1-bit state
         .adl => @enumToInt(self.mode.madl),
-        .ief => self.ief2,
+        .ief => @boolToInt(self.ief2),
 
         // 1-bit flags
-        .cf => util.fromBacking(Flags, self.getShadow(.f)).cf,
-        .nf => util.fromBacking(Flags, self.getShadow(.f)).nf,
-        .pv => util.fromBacking(Flags, self.getShadow(.f)).pv,
-        .xf => util.fromBacking(Flags, self.getShadow(.f)).xf,
-        .hc => util.fromBacking(Flags, self.getShadow(.f)).hc,
-        .yf => util.fromBacking(Flags, self.getShadow(.f)).yf,
-        .zf => util.fromBacking(Flags, self.getShadow(.f)).zf,
-        .sf => util.fromBacking(Flags, self.getShadow(.f)).sf,
+        .cf => @boolToInt(util.fromBacking(Flags, self.getShadow(.f)).cf),
+        .nf => @boolToInt(util.fromBacking(Flags, self.getShadow(.f)).nf),
+        .pv => @boolToInt(util.fromBacking(Flags, self.getShadow(.f)).pv),
+        .xf => @boolToInt(util.fromBacking(Flags, self.getShadow(.f)).xf),
+        .hc => @boolToInt(util.fromBacking(Flags, self.getShadow(.f)).hc),
+        .yf => @boolToInt(util.fromBacking(Flags, self.getShadow(.f)).yf),
+        .zf => @boolToInt(util.fromBacking(Flags, self.getShadow(.f)).zf),
+        .sf => @boolToInt(util.fromBacking(Flags, self.getShadow(.f)).sf),
 
         // 8-bit registers
         .f => util.fromBacking(u8u8, self.getShadow(.af)).low,
@@ -269,31 +269,31 @@ pub fn set(self: *Cpu, comptime address: RegisterAddress, value: RegisterType(ad
         // 1-bit state
         .adl => self.mode.adl = @intToEnum(Adl, value),
         .ief => {
-            self.ief1 = value;
+            self.ief1 = value != 0;
             self.setShadow(.ief, value);
         },
 
         // 1-bit flags
-        .cf => self.cf = value,
-        .nf => self.nf = value,
-        .pv => self.pv = value,
-        .xf => self.xf = value,
-        .hc => self.hc = value,
-        .yf => self.yf = value,
-        .zf => self.zf = value,
-        .sf => self.sf = value,
+        .cf => self.cf = value != 0,
+        .nf => self.nf = value != 0,
+        .pv => self.pv = value != 0,
+        .xf => self.xf = value != 0,
+        .hc => self.hc = value != 0,
+        .yf => self.yf = value != 0,
+        .zf => self.zf = value != 0,
+        .sf => self.sf = value != 0,
 
         // 8-bit registers
         .f => {
             const flags = util.fromBacking(Flags, value);
-            self.set(.cf, flags.cf);
-            self.set(.nf, flags.nf);
-            self.set(.pv, flags.pv);
-            self.set(.xf, flags.xf);
-            self.set(.hc, flags.hc);
-            self.set(.yf, flags.yf);
-            self.set(.zf, flags.zf);
-            self.set(.sf, flags.sf);
+            self.cf = flags.cf;
+            self.nf = flags.nf;
+            self.pv = flags.pv;
+            self.xf = flags.xf;
+            self.hc = flags.hc;
+            self.yf = flags.yf;
+            self.zf = flags.zf;
+            self.sf = flags.sf;
         },
         .a => self.a = value,
         .c => @ptrCast(*u8u8u8, &self.bc).low = value,
@@ -342,17 +342,17 @@ pub fn setShadow(self: *Cpu, comptime address: RegisterAddress, value: RegisterT
     switch (address) {
         // 1-bit state
         .adl => self.mode.madl = @intToEnum(Adl, value),
-        .ief => self.ief2 = value,
+        .ief => self.ief2 = value != 0,
 
         // 1-bit flags
-        .cf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).cf = value,
-        .nf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).nf = value,
-        .pv => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).pv = value,
-        .xf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).xf = value,
-        .hc => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).hc = value,
-        .yf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).yf = value,
-        .zf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).zf = value,
-        .sf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).sf = value,
+        .cf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).cf = value != 0,
+        .nf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).nf = value != 0,
+        .pv => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).pv = value != 0,
+        .xf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).xf = value != 0,
+        .hc => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).hc = value != 0,
+        .yf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).yf = value != 0,
+        .zf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).zf = value != 0,
+        .sf => @ptrCast(*Flags, &@ptrCast(*u8u8, &self.@"af'").low).sf = value != 0,
 
         // 8-bit registers
         .f => @ptrCast(*u8u8, &self.@"af'").low = value,
