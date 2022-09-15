@@ -68,6 +68,12 @@ const Uop = enum {
     add_cc_call,
 
     dispatch_base,
+    dispatch_cb,
+    dispatch_dd,
+    dispatch_ddcb,
+    dispatch_ed,
+    dispatch_fd,
+    dispatch_fdcb,
 
     mode_sis,
     mode_lis,
@@ -141,7 +147,8 @@ const Uop = enum {
     write_word,
     write_word_rev,
 
-    call,
+    call_madl,
+    call_suffix,
     ret,
 
     rlca_byte,
@@ -156,6 +163,7 @@ const Uop = enum {
     dec_byte,
     inc_word,
     dec_word,
+    sub_word_2,
     inc_addr,
     dec_addr,
     add_offset,
@@ -368,67 +376,82 @@ const base = [_][]const Uop{
     &[_]Uop{ .load_sp, .mask_addr_inst, .read_word, .store_bc, .inc_addr, .mask_addr_inst, .store_sp }, // pop bc
     &[_]Uop{ .fetch_word_flush, .nz, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp nz,nn
     &[_]Uop{ .fetch_word_flush, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp nn
-    &[_]Uop{ .fetch_word_flush, .nz, .add_cc_call, .ex_pc, .call }, // call nz,nn
+    &[_]Uop{ .fetch_word_flush, .nz, .add_cc_call, .ex_pc, .call_suffix }, // call nz,nn
     &[_]Uop{ .add_r_inst, .load_sp, .dec_addr, .mask_addr_inst, .load_bc, .write_word_rev, .store_sp }, // push bc
     &[_]Uop{ .fetch_byte, .save, .load_a, .add_bytes, .store_a }, // add a,n
-    &[_]Uop{ .add_cc_1, .set_00h, .ex_pc, .call }, // rst 00h
+    &[_]Uop{ .add_cc_1, .set_00h, .ex_pc, .call_suffix }, // rst 00h
     &[_]Uop{ .add_cc_1, .z, .flush, .add_r_1, .ret, .store_pc, .add_cc_1 }, // ret z
     &[_]Uop{ .flush, .ret, .store_pc, .add_cc_1 }, // ret
     &[_]Uop{ .fetch_word_flush, .z, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp z,nn
-    &[_]Uop{.unimplemented}, // CB
-    &[_]Uop{ .fetch_word_flush, .z, .add_cc_call, .ex_pc, .call }, // call z,nn
-    &[_]Uop{ .fetch_word_flush, .ex_pc, .call }, // call nn
+    &[_]Uop{ .add_r_1, .fetch_byte, .dispatch_cb }, // CB
+    &[_]Uop{ .fetch_word_flush, .z, .add_cc_call, .ex_pc, .call_suffix }, // call z,nn
+    &[_]Uop{ .fetch_word_flush, .ex_pc, .call_suffix }, // call nn
     &[_]Uop{ .fetch_byte, .save, .load_a, .adc_bytes, .store_a }, // adc a,n
-    &[_]Uop{ .add_cc_1, .set_08h, .ex_pc, .call }, // rst 08h
+    &[_]Uop{ .add_cc_1, .set_08h, .ex_pc, .call_suffix }, // rst 08h
     &[_]Uop{ .add_cc_1, .nc, .flush, .add_r_1, .ret, .store_pc, .add_cc_1 }, // ret nc
     &[_]Uop{ .load_sp, .mask_addr_inst, .read_word, .store_de, .inc_addr, .mask_addr_inst, .store_sp }, // pop de
     &[_]Uop{ .fetch_word_flush, .nc, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp nc,nn
     &[_]Uop{ .fetch_byte, .load_a_high, .save, .load_a, .write_port }, // out (n),a
-    &[_]Uop{ .fetch_word_flush, .nc, .add_cc_call, .ex_pc, .call }, // call nc,nn
+    &[_]Uop{ .fetch_word_flush, .nc, .add_cc_call, .ex_pc, .call_suffix }, // call nc,nn
     &[_]Uop{ .add_r_inst, .load_sp, .dec_addr, .mask_addr_inst, .load_de, .write_word_rev, .store_sp }, // push de
     &[_]Uop{ .fetch_byte, .save, .load_a, .sub_bytes, .store_a }, // sub a,n
-    &[_]Uop{ .add_cc_1, .set_10h, .ex_pc, .call }, // rst 10h
+    &[_]Uop{ .add_cc_1, .set_10h, .ex_pc, .call_suffix }, // rst 10h
     &[_]Uop{ .add_cc_1, .c, .flush, .add_r_1, .ret, .store_pc, .add_cc_1 }, // ret c
     &[_]Uop{ .load_bc, .@"ex_bc'", .store_bc, .load_de, .@"ex_de'", .store_de, .load_hl, .@"ex_hl'", .store_hl }, // exx
     &[_]Uop{ .fetch_word_flush, .c, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp c,nn
     &[_]Uop{ .fetch_byte, .load_a_high, .save, .read_port, .store_a }, // in a,(n)
-    &[_]Uop{ .fetch_word_flush, .c, .add_cc_call, .ex_pc, .call }, // call c,nn
-    &[_]Uop{.unimplemented}, // DD
+    &[_]Uop{ .fetch_word_flush, .c, .add_cc_call, .ex_pc, .call_suffix }, // call c,nn
+    &[_]Uop{ .add_r_1, .fetch_byte, .dispatch_dd }, // DD
     &[_]Uop{ .fetch_byte, .save, .load_a, .sbc_bytes, .store_a }, // sbc a,n
-    &[_]Uop{ .add_cc_1, .set_18h, .ex_pc, .call }, // rst 18h
+    &[_]Uop{ .add_cc_1, .set_18h, .ex_pc, .call_suffix }, // rst 18h
     &[_]Uop{ .add_cc_1, .po, .flush, .add_r_1, .ret, .store_pc, .add_cc_1 }, // ret po
     &[_]Uop{ .load_sp, .mask_addr_inst, .read_word, .store_hl, .inc_addr, .mask_addr_inst, .store_sp }, // pop hl
     &[_]Uop{ .fetch_word_flush, .po, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp po,nn
     &[_]Uop{ .load_sp, .mask_addr_inst, .read_word, .ex_hl_inst, .write_word_rev }, // ex (sp),hl
-    &[_]Uop{ .fetch_word_flush, .po, .add_cc_call, .ex_pc, .call }, // call po,nn
+    &[_]Uop{ .fetch_word_flush, .po, .add_cc_call, .ex_pc, .call_suffix }, // call po,nn
     &[_]Uop{ .add_r_inst, .load_sp, .dec_addr, .mask_addr_inst, .load_hl, .write_word_rev, .store_sp }, // push hl
     &[_]Uop{ .fetch_byte, .save, .load_a, .and_bytes, .store_a }, // and a,n
-    &[_]Uop{ .add_cc_1, .set_20h, .ex_pc, .call }, // rst 20h
+    &[_]Uop{ .add_cc_1, .set_20h, .ex_pc, .call_suffix }, // rst 20h
     &[_]Uop{ .add_cc_1, .pe, .flush, .add_r_1, .ret, .store_pc, .add_cc_1 }, // ret pe
     &[_]Uop{ .flush, .fetch_byte, .load_hl, .mask_word_inst, .store_pc, .adl_inst }, // jp (hl)
     &[_]Uop{ .fetch_word_flush, .pe, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp pe,nn
     &[_]Uop{ .load_de, .mask_word_inst, .ex_hl, .mask_word_inst, .store_de }, // ex de,hl
-    &[_]Uop{ .fetch_word_flush, .pe, .add_cc_call, .ex_pc, .call }, // call pe,nn
-    &[_]Uop{.unimplemented}, // ED
+    &[_]Uop{ .fetch_word_flush, .pe, .add_cc_call, .ex_pc, .call_suffix }, // call pe,nn
+    &[_]Uop{ .add_r_1, .fetch_byte, .dispatch_ed }, // ED
     &[_]Uop{ .fetch_byte, .save, .load_a, .xor_bytes, .store_a }, // xor a,n
-    &[_]Uop{ .add_cc_1, .set_28h, .ex_pc, .call }, // rst 28h
+    &[_]Uop{ .add_cc_1, .set_28h, .ex_pc, .call_suffix }, // rst 28h
     &[_]Uop{ .add_cc_1, .p, .flush, .add_r_1, .ret, .store_pc, .add_cc_1 }, // ret p
     &[_]Uop{ .load_sp, .mask_addr_inst, .read_word, .store_af, .inc_addr, .mask_addr_inst, .store_sp }, // pop af
     &[_]Uop{ .fetch_word_flush, .p, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp p,nn
     &[_]Uop{.clear_ief}, // di
-    &[_]Uop{ .fetch_word_flush, .p, .add_cc_call, .ex_pc, .call }, // call p,nn
+    &[_]Uop{ .fetch_word_flush, .p, .add_cc_call, .ex_pc, .call_suffix }, // call p,nn
     &[_]Uop{ .add_r_inst, .load_sp, .dec_addr, .mask_addr_inst, .load_af, .write_word_rev, .store_sp }, // push af
     &[_]Uop{ .fetch_byte, .save, .load_a, .or_bytes, .store_a }, // or a,n
-    &[_]Uop{ .add_cc_1, .set_30h, .ex_pc, .call }, // rst 30h
+    &[_]Uop{ .add_cc_1, .set_30h, .ex_pc, .call_suffix }, // rst 30h
     &[_]Uop{ .add_cc_1, .m, .flush, .add_r_1, .ret, .store_pc, .add_cc_1 }, // ret m
     &[_]Uop{ .load_hl, .save, .store_sp }, // ld sp,hl
     &[_]Uop{ .fetch_word_flush, .m, .add_cc_1, .mask_word_inst, .store_pc, .adl_inst }, // jp m,nn
     &[_]Uop{ .set_ief, .add_r_1, .fetch_byte, .dispatch_base }, // ei
-    &[_]Uop{ .fetch_word_flush, .m, .add_cc_call, .ex_pc, .call }, // call m,nn
-    &[_]Uop{.unimplemented}, // FD
+    &[_]Uop{ .fetch_word_flush, .m, .add_cc_call, .ex_pc, .call_suffix }, // call m,nn
+    &[_]Uop{ .add_r_1, .fetch_byte, .dispatch_fd }, // FD
     &[_]Uop{ .fetch_byte, .save, .load_a, .sub_bytes }, // cp a,n
-    &[_]Uop{ .add_cc_1, .set_38h, .ex_pc, .call }, // rst 38h
+    &[_]Uop{ .add_cc_1, .set_38h, .ex_pc, .call_suffix }, // rst 38h
 };
+
+fn fillUnimplemented(comptime table: []const []const Uop) *const [1 << 8][]const Uop {
+    var result: [1 << 8][]const Uop = undefined;
+    std.mem.copy([]const Uop, &result, table);
+    std.mem.set([]const Uop, result[table.len..], &[_]Uop{.unimplemented});
+    return &result;
+}
+const cb = fillUnimplemented(&[_][]const Uop{&[_]Uop{}});
+const dd = fillUnimplemented(&[_][]const Uop{
+    &[_]Uop{ .add_cc_1, .set_00h, .ex_pc, .dec_word, .sub_word_2, .call_madl },
+});
+const ddcb = fillUnimplemented(&[_][]const Uop{});
+const ed = fillUnimplemented(&[_][]const Uop{});
+const fd = fillUnimplemented(&[_][]const Uop{});
+const fdcb = fillUnimplemented(&[_][]const Uop{});
 
 pub fn decode(impl: anytype) anyerror!void {
     try dispatchAll(impl, &[_]Uop{ .add_r_1, .fetch_byte, .dispatch_base });
@@ -475,6 +498,12 @@ fn dispatch(impl: anytype, comptime uop: Uop) anyerror!void {
         .add_cc_call => impl.addCycleCall(),
 
         .dispatch_base => impl.dispatch(dispatcherFor(&base)),
+        .dispatch_cb => impl.dispatch(dispatcherFor(cb)),
+        .dispatch_dd => impl.dispatch(dispatcherFor(dd)),
+        .dispatch_ddcb => impl.dispatch(dispatcherFor(ddcb)),
+        .dispatch_ed => impl.dispatch(dispatcherFor(ed)),
+        .dispatch_fd => impl.dispatch(dispatcherFor(fd)),
+        .dispatch_fdcb => impl.dispatch(dispatcherFor(fdcb)),
 
         .mode_sis => impl.setMode(.{ .suffix = true, .inst = .s, .imm = .is }),
         .mode_lis => impl.setMode(.{ .suffix = true, .inst = .l, .imm = .is }),
@@ -554,7 +583,8 @@ fn dispatch(impl: anytype, comptime uop: Uop) anyerror!void {
         .write_word => impl.writeMemoryWord(.forward),
         .write_word_rev => impl.writeMemoryWord(.reverse),
 
-        .call => impl.callSuffix(),
+        .call_madl => impl.callMadl(),
+        .call_suffix => impl.callSuffix(),
         .ret => impl.ret(),
 
         .rlca_byte => impl.rlcaByte(),
@@ -569,6 +599,7 @@ fn dispatch(impl: anytype, comptime uop: Uop) anyerror!void {
         .dec_byte => impl.addByte(-1),
         .inc_word => impl.addWord(1),
         .dec_word => impl.addWord(-1),
+        .sub_word_2 => impl.addWord(-2),
         .inc_addr => impl.addAddress(1),
         .dec_addr => impl.addAddress(-1),
         .add_offset => impl.addOffset(),
