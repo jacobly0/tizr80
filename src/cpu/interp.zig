@@ -42,20 +42,13 @@ fn dump(self: *Interpreter, cpu: *Cpu) void {
         \\   {X:0>2} {:10} CC
         \\
     , .{
-        cpu.get(.af),
-        cpu.getShadow(.af),
-        cpu.get(.ubc),
-        cpu.getShadow(.ubc),
-        cpu.get(.ude),
-        cpu.getShadow(.ude),
-        cpu.get(.uhl),
-        cpu.getShadow(.uhl),
-        cpu.get(.uix),
-        cpu.get(.uiy),
-        cpu.get(.pc),
-        cpu.get(.r),
-        self.fetch_cache,
-        cpu.cycles,
+        cpu.getAF(),      cpu.@"af'".word.word,
+        cpu.bc.long,      cpu.@"bc'".long,
+        cpu.de.long,      cpu.@"de'".long,
+        cpu.hl.long,      cpu.@"hl'".long,
+        cpu.ix.long,      cpu.iy.long,
+        cpu.epc.long,     cpu.getR(),
+        self.fetch_cache, cpu.cycles,
     });
 }
 
@@ -65,7 +58,7 @@ fn execute(backend: *Cpu.Backend, core: *CEmuCore, mode: Cpu.ExecuteMode) void {
     var state = State.init(self, core);
     if (backend.flush) {
         backend.flush = false;
-        core.cpu.setShadow(.pc, core.cpu.get(.pc));
+        core.cpu.pc = core.cpu.epc;
         state.fetchByte(.prefetch) catch unreachable;
         if (enable_dump) self.dump(&core.cpu);
     }
@@ -120,14 +113,17 @@ const State = struct {
     }
     fn effectiveAddress(self: *State, address: u24, mode: decode.Mode.Instruction) u24 {
         return switch (mode) {
-            .s => util.toBacking(Cpu.u8u16{
-                .short = @truncate(u16, address),
-                .upper = self.core.cpu.get(.mb),
-            }),
+            .s => (Cpu.Long{ .ext = .{
+                .word = @truncate(u16, address),
+                .upper = self.core.cpu.mbi.ext.upper,
+            } }).long,
             .l => address,
         };
     }
 
+    pub fn truncate(self: *State, comptime narrow: type) error{}!void {
+        self.accumulator = @truncate(narrow, @intCast(u24, self.accumulator));
+    }
     pub fn maskWordInstruction(self: *State) error{}!void {
         self.accumulator = maskWord(@intCast(u24, self.accumulator), self.mode.inst);
     }
@@ -142,7 +138,7 @@ const State = struct {
     }
 
     pub fn skip(self: *State) error{}!void {
-        self.core.cpu.setShadow(.pc, self.core.cpu.getShadow(.pc) +% 6);
+        self.core.cpu.pc.long +%= 6;
         try self.flush();
     }
 
@@ -150,16 +146,13 @@ const State = struct {
         self.interp.backend.flush = true;
     }
     pub fn fetchByte(self: *State, comptime prefetch_mode: decode.PrefetchMode) error{}!void {
-        const raw_pc = self.core.cpu.getShadow(.pc);
-        const pc = self.effectiveAddress(
-            raw_pc,
-            decode.Mode.Instruction.fromAdl(self.core.cpu.mode.adl),
-        );
+        const pc = self.core.cpu.pc.long;
+        const epc = self.effectiveAddress(pc, decode.Mode.Instruction.fromAdl(self.core.cpu.mode.adl));
         self.accumulator = self.interp.fetch_cache;
-        self.core.cpu.set(.pc, pc);
+        self.core.cpu.epc.long = epc;
         if (prefetch_mode == .prefetch) {
-            self.interp.fetch_cache = self.core.mem.readCpuByte(pc);
-            self.core.cpu.setShadow(.pc, raw_pc +% 1);
+            self.interp.fetch_cache = self.core.mem.readCpuByte(epc);
+            self.core.cpu.pc.long = pc +% 1;
         }
     }
     pub fn fetchWord(self: *State, comptime prefetch_mode: decode.PrefetchMode) error{}!void {
@@ -259,10 +252,10 @@ const State = struct {
     }
 
     pub fn storeRegister(self: *State, comptime id: Cpu.RegisterId) error{}!void {
-        self.core.cpu.set(id, @truncate(Cpu.RegisterType(id), @intCast(u24, self.accumulator)));
+        self.core.cpu.set(id, @intCast(u24, self.accumulator));
     }
     pub fn storeShadowRegister(self: *State, comptime id: Cpu.RegisterId) error{}!void {
-        self.core.cpu.setShadow(id, @truncate(Cpu.RegisterType(id), @intCast(u24, self.accumulator)));
+        self.core.cpu.setShadow(id, @intCast(u24, self.accumulator));
     }
     fn storeStackPointer(self: *State, mode: decode.Mode.Instruction) void {
         switch (mode) {
@@ -472,6 +465,10 @@ const State = struct {
         }
     }
 
+    pub fn offsetByte(self: *State, comptime offset: comptime_int) error{}!void {
+        self.accumulator = @bitCast(u8, @bitCast(i8, @intCast(u8, self.accumulator)) +% offset);
+    }
+
     pub fn rlcaByte(self: *State) error{}!void {
         const byte = @intCast(u8, self.accumulator);
         self.core.cpu.set(.cf, @truncate(u1, byte >> 7));
@@ -487,7 +484,7 @@ const State = struct {
         self.accumulator = std.math.rotr(u8, byte, 1);
     }
     pub fn rlaByte(self: *State) error{}!void {
-        const carry = self.core.cpu.get(.cf);
+        const carry = @boolToInt(self.core.cpu.cf);
         const byte = @intCast(u8, self.accumulator);
         self.core.cpu.set(.cf, @truncate(u1, byte >> 7));
         self.core.cpu.nf = false;
@@ -495,7 +492,7 @@ const State = struct {
         self.accumulator = byte << 1 | @as(u8, carry) << 0;
     }
     pub fn rraByte(self: *State) error{}!void {
-        const carry = self.core.cpu.get(.cf);
+        const carry = @boolToInt(self.core.cpu.cf);
         const byte = @intCast(u8, self.accumulator);
         self.core.cpu.set(.cf, @truncate(u1, byte >> 0));
         self.core.cpu.nf = false;
@@ -597,7 +594,7 @@ const State = struct {
         self.accumulator = unsigned_result;
     }
     pub fn adcBytes(self: *State) error{}!void {
-        const carry = self.core.cpu.get(.cf);
+        const carry = @boolToInt(self.core.cpu.cf);
 
         const unsigned_lhs = @intCast(u8, self.accumulator);
         const unsigned_rhs = @intCast(u8, self.address);
@@ -645,7 +642,7 @@ const State = struct {
         self.accumulator = unsigned_result;
     }
     pub fn sbcBytes(self: *State) error{}!void {
-        const carry = self.core.cpu.get(.cf);
+        const carry = @boolToInt(self.core.cpu.cf);
 
         const unsigned_lhs = @intCast(u8, self.accumulator);
         const unsigned_rhs = @intCast(u8, self.address);
@@ -814,7 +811,6 @@ test "ezex" {
                             .z80 => 0x240,
                             .ez80 => 0x243,
                         };
-                        core.cpu.needFlush();
                         core.cpu.set(.pc, 0xE30900);
                         while (core.cpu.get(.pc) < 0xE30906)
                             core.cpu.step();
@@ -841,13 +837,13 @@ test "ezex" {
                             .hc = false,
                             .yf = core.cpu.getShadow(.yf) != 0,
                             .zf = core.cpu.get(.r) == 0,
-                            .sf = @bitCast(i8, core.cpu.get(.r)) < 0,
+                            .sf = @bitCast(i8, core.cpu.getR()) < 0,
                         }));
-                        std.mem.writeIntLittle(u8, output[21..22], core.cpu.get(.r));
-                        const i = core.cpu.get(.i);
-                        std.mem.writeIntLittle(u16, output[22..24], i +% core.cpu.get(.sps));
+                        std.mem.writeIntLittle(u8, output[21..22], core.cpu.getR());
+                        const i = core.cpu.mbi.word.word;
+                        std.mem.writeIntLittle(u16, output[22..24], i +% core.cpu.sps.word);
                         std.mem.writeIntLittle(u16, output[24..26], i);
-                        std.mem.writeIntLittle(u8, output[26..27], core.cpu.get(.mb));
+                        std.mem.writeIntLittle(u8, output[26..27], core.cpu.mbi.byte.upper);
                         std.mem.writeIntLittle(u24, output[27..30], core.cpu.get(.uiy));
                         std.mem.writeIntLittle(u24, output[30..33], core.cpu.get(.uix));
                         std.mem.writeIntLittle(u24, output[33..36], core.cpu.getShadow(.uhl));

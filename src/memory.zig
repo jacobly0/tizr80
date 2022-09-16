@@ -71,11 +71,11 @@ pub fn writePortByte(self: *Memory, address: u16, value: u8) void {
     }
 }
 
-fn addCC(self: *Memory, increment: u64) void {
+fn addCycles(self: *Memory, increment: u64) void {
     @fieldParentPtr(CEmuCore, "mem", self).cpu.cycles +%= increment;
 }
 pub fn readCpuByte(self: *Memory, address: u24) u8 {
-    self.addCC(switch (address) {
+    self.addCycles(switch (address) {
         0x000000...0xCFFFFF => if (address < self.flash.len) 10 else 258,
         ram_start...ram_start + self.ram.len - 1 => 4,
         0xE30800...0xE30BFF => 3,
@@ -87,7 +87,7 @@ pub fn readCpuByte(self: *Memory, address: u24) u8 {
     return self.readByte(address);
 }
 pub fn writeCpuByte(self: *Memory, address: u24, value: u8) void {
-    self.addCC(switch (address) {
+    self.addCycles(switch (address) {
         ram_start...ram_start + self.ram.len - 1 => 2,
         0xE30800...0xE30BFF => 2,
         else => {
@@ -98,7 +98,7 @@ pub fn writeCpuByte(self: *Memory, address: u24, value: u8) void {
     self.writeByte(address, value);
 }
 pub fn readCpuPortByte(self: *Memory, address: u16) u8 {
-    self.addCC(switch (address) {
+    self.addCycles(switch (address) {
         0x0020...0x0025 => 2,
         0x4800...0x4BFF => 3,
         else => {
@@ -109,7 +109,7 @@ pub fn readCpuPortByte(self: *Memory, address: u16) u8 {
     return self.readPortByte(address);
 }
 pub fn writeCpuPortByte(self: *Memory, address: u16, value: u8) void {
-    self.addCC(switch (address) {
+    self.addCycles(switch (address) {
         0x0020...0x0025 => 2,
         0x4800...0x4BFF => 2,
         else => {

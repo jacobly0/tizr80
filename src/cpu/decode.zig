@@ -161,6 +161,7 @@ const Uop = enum {
     ccf,
     inc_byte,
     dec_byte,
+    sub_byte_1,
     inc_word,
     dec_word,
     sub_word_2,
@@ -196,7 +197,7 @@ const base = [_][]const Uop{
     &[_]Uop{ .load_c, .dec_byte, .store_c }, // dec c
     &[_]Uop{ .fetch_byte, .store_c }, // ld c,n
     &[_]Uop{ .load_a, .rrca_byte, .store_a }, // rrca
-    &[_]Uop{ .fetch_byte, .save, .load_b, .dec_word, .store_b, .non_zero, .flush, .add_cc_1, .load_pc, .dec_word, .add_offset, .mask_word_inst, .store_pc }, // djnz d
+    &[_]Uop{ .fetch_byte, .save, .load_b, .sub_byte_1, .store_b, .non_zero, .flush, .add_cc_1, .load_pc, .dec_word, .add_offset, .mask_word_inst, .store_pc }, // djnz d
     &[_]Uop{ .fetch_word, .mask_word_inst, .store_de }, // ld de,nn
     &[_]Uop{ .load_de, .save, .mask_addr_inst, .load_a, .write_byte }, // ld (de),a
     &[_]Uop{ .load_de, .inc_word, .mask_word_inst, .store_de }, // inc de
@@ -551,7 +552,10 @@ fn dispatch(impl: anytype, comptime uop: Uop) anyerror!void {
         .store_h => impl.storeRegister(.h),
         .store_l => impl.storeRegister(.l),
         .store_a => impl.storeRegister(.a),
-        .store_af => impl.storeRegister(.af),
+        .store_af => err: {
+            try impl.truncate(u16);
+            break :err impl.storeRegister(.af);
+        },
         .store_bc => impl.storeRegister(.ubc),
         .store_de => impl.storeRegister(.ude),
         .store_hl => impl.storeRegister(.uhl),
@@ -597,6 +601,7 @@ fn dispatch(impl: anytype, comptime uop: Uop) anyerror!void {
         .ccf => impl.ccf(),
         .inc_byte => impl.addByte(1),
         .dec_byte => impl.addByte(-1),
+        .sub_byte_1 => impl.offsetByte(-1),
         .inc_word => impl.addWord(1),
         .dec_word => impl.addWord(-1),
         .sub_word_2 => impl.addWord(-2),

@@ -27,59 +27,70 @@ pub const CreateOptions = struct {
     signal_handler: SignalHandler = null,
 };
 
-pub const Property = if (options.debugger) enum {
-    Dev,
-    Reg,
-    RegShadow,
-    Key,
-    FlashSize,
-    MemZ80,
-    MemAdl,
-    Flash,
-    Ram,
-    Port,
-    GpioEnable,
-    Transfer,
+pub const Property = enum {
+    device,
+    register,
+    shadow_register,
+    key,
+    flash_size,
+    memory_z80,
+    memory_adl,
+    flash,
+    ram,
+    port,
+    transfer,
 
-    Watch,
-    WatchAddr,
-    WatchSize,
-    WatchFlags,
-    MemZ80WatchFlags,
-    MemAdlWatchFlags,
-    FlashWatchFlags,
-    RamWatchFlags,
-    PortWatchFlags,
-} else enum {
-    Dev,
-    Reg,
-    RegShadow,
-    Key,
-    FlashSize,
-    MemZ80,
-    MemAdl,
-    Flash,
-    Ram,
-    Port,
-    GpioEnable,
-    Transfer,
+    // options.debugger only
+    watch,
+    watch_address,
+    watch_size,
+    watch_flags,
+    memory_z80_watch_flags,
+    memory_adl_watch_flags,
+    flash_watch_flags,
+    ram_watch_flags,
+    port_watch_flags,
+
+    pub const Key = union(Property) {
+        device: Device,
+        register: Cpu.RegisterId,
+        shadow_register: Cpu.RegisterId,
+        key: Keypad.Key,
+        flash_size: u24,
+        memory_z80: u16,
+        memory_adl: u24,
+        flash: u23,
+        ram: u19,
+        port: u16,
+        transfer: Transfer,
+
+        watch: ?u24,
+        watch_address: u24,
+        watch_size: u24,
+        watch_flags: u24,
+        memory_z80_watch_flags: u24,
+        memory_adl_watch_flags: u24,
+        flash_watch_flags: u24,
+        ram_watch_flags: u24,
+        port_watch_flags: u24,
+    };
 };
 
 pub const Device = enum {
-    Unknown,
-    TI84PCE,
-    TI84PCEPE,
-    TI83PCE,
-    TI83PCEEP,
-    TI84PCET,
-    TI84PCETPE,
+    unknown,
+    ti84pce,
+    ti84pcepe,
+    ti83pce,
+    ti83pceep,
+    ti84pcet,
+    ti84pcetpe,
 };
 
-pub const TransferAddress = enum {
-    Total,
-    Progress,
-    Remaining,
-    Error,
+pub const Transfer = enum {
+    total,
+    progress,
+    remaining,
+    @"error",
 };
 
 pub const SignalHandler = ?*const fn (*CEmuCore, Signal) void;
@@ -147,42 +158,34 @@ fn IntTypeForBuffer(buffer: []const u8) type {
     return std.meta.Int(.unsigned, std.math.min(buffer.len, 3) * 8);
 }
 
-fn getRaw(self: *CEmuCore, property: Property, address: u24) ?u24 {
-    return switch (property) {
-        .Reg => inline for (@typeInfo(Cpu.RegisterId).Enum.fields) |field| {
-            if (address == field.value) {
-                break self.cpu.get(@field(Cpu.RegisterId, field.name));
-            }
-        } else unreachable,
-        .RegShadow => inline for (@typeInfo(Cpu.RegisterId).Enum.fields) |field| {
-            if (address == field.value) {
-                break self.cpu.getShadow(@field(Cpu.RegisterId, field.name));
-            }
-        } else unreachable,
-        .Key => self.keypad.getKey(@intCast(u8, address)),
-        .Ram => self.mem.readByte(Memory.ram_start + @as(u24, @intCast(u19, address))),
-        .GpioEnable => self.keypad.getGpio(@intCast(u5, address)),
+fn getRaw(self: *CEmuCore, key: Property.Key) ?u24 {
+    return switch (key) {
+        .register => |id| self.cpu.get(id),
+        .shadow_register => |id| self.cpu.getShadow(id),
+        .key => |key| self.keypad.getKey(key),
+        .flash => |address| self.mem.readByte(address),
+        .ram => |address| self.mem.readByte(Memory.ram_start + @as(u24, address)),
         else => std.debug.todo("unimplemented"),
     };
 }
-pub fn get(self: *CEmuCore, property: Property, address: u24) ?u24 {
-    const needs_sync = switch (property) {
+pub fn get(self: *CEmuCore, key: Property.Key) ?u24 {
+    const needs_sync = switch (key) {
         else => true,
     };
     if (needs_sync) if (self.sync) |*sync| sync.enter();
     defer if (needs_sync) if (self.sync) |*sync| sync.leave();
 
-    return self.getRaw(property, address);
+    return self.getRaw(key);
 }
-pub fn getSlice(self: *CEmuCore, property: Property, address: u24, buffer: []u8) void {
-    const needs_sync = switch (property) {
+pub fn getSlice(self: *CEmuCore, key: Property.Key, buffer: []u8) void {
+    const needs_sync = switch (key) {
         else => true,
     };
     if (needs_sync) if (self.sync) |*sync| sync.enter();
     defer if (needs_sync) if (self.sync) |*sync| sync.leave();
 
-    switch (property) {
-        else => if (self.getRaw(property, address)) |value|
+    switch (key) {
+        else => if (self.getRaw(key)) |value|
             inline for (.{ 3, 2, 1, 0 }) |len| {
                 const IntType = std.meta.Int(.unsigned, len * 8);
                 if (len <= buffer.len)
@@ -190,57 +193,38 @@ pub fn getSlice(self: *CEmuCore, property: Property, address: u24, buffer: []u8)
             } else unreachable,
     }
 }
-fn setRaw(self: *CEmuCore, property: Property, address: u24, value: ?u24) void {
-    switch (property) {
-        .Reg => inline for (@typeInfo(Cpu.RegisterId).Enum.fields) |field| {
-            if (address == field.value) {
-                const register_id = @field(Cpu.RegisterId, field.name);
-                const register_value = @intCast(Cpu.RegisterType(register_id), value.?);
-                switch (register_id) {
-                    .pc => if (register_value != self.cpu.get(register_id)) self.cpu.needFlush(),
-                    else => {},
-                }
-                self.cpu.set(register_id, register_value);
-                break;
-            }
-        } else unreachable,
-        .RegShadow => inline for (@typeInfo(Cpu.RegisterId).Enum.fields) |field| {
-            if (address == field.value) {
-                const register_id = @field(Cpu.RegisterId, field.name);
-                const register_value = @intCast(Cpu.RegisterType(register_id), value.?);
-                self.cpu.setShadow(register_id, register_value);
-                break;
-            }
-        },
-        .Key => self.keypad.setKey(@intCast(u8, address), @intCast(u1, value.?)),
-        .Ram => self.mem.writeByte(Memory.ram_start + @as(u24, @intCast(u19, address)), @intCast(u8, value.?)),
-        .GpioEnable => self.keypad.setGpio(@intCast(u5, address), @intCast(u1, value.?)),
+fn setRaw(self: *CEmuCore, key: Property.Key, value: ?u24) void {
+    switch (key) {
+        .register => |id| self.cpu.set(id, value.?),
+        .shadow_register => |id| self.cpu.setShadow(id, value.?),
+        .key => |key| self.keypad.setKey(key, @intCast(u1, value.?)),
+        .ram => |address| self.mem.writeByte(Memory.ram_start + @as(u24, address), @intCast(u8, value.?)),
         else => std.debug.todo("unimplemented"),
     }
 }
-pub fn set(self: *CEmuCore, property: Property, address: u24, value: ?u24) void {
-    const needs_sync = switch (property) {
-        .Key => false,
+pub fn set(self: *CEmuCore, key: Property.Key, value: ?u24) void {
+    const needs_sync = switch (key) {
+        .key => false,
         else => true,
     };
     if (needs_sync) if (self.sync) |*sync| sync.enter();
     defer if (needs_sync) if (self.sync) |*sync| sync.leave();
 
-    self.setRaw(property, address, value);
+    self.setRaw(key, value);
 }
-pub fn setSlice(self: *CEmuCore, property: Property, address: u24, buffer: []const u8) void {
-    const needs_sync = switch (property) {
-        .Key => false,
+pub fn setSlice(self: *CEmuCore, key: Property.Key, buffer: []const u8) void {
+    const needs_sync = switch (key) {
+        .key => false,
         else => true,
     };
     if (needs_sync) if (self.sync) |*sync| sync.enter();
     defer if (needs_sync) if (self.sync) |*sync| sync.leave();
 
-    switch (property) {
-        .Port => {
+    switch (key) {
+        .port => |address| {
             var offset: usize = 0;
             while (offset < buffer.len) : (offset += 1) {
-                const current = @truncate(u16, address) +% offset;
+                const current = address + offset;
                 if (current >= 0x0020 and current < 0x0026)
                     self.mem.port0[current - 0x0020] = buffer[offset]
                 else if (current >= 0x2010 and current < 0x2050)
@@ -256,7 +240,7 @@ pub fn setSlice(self: *CEmuCore, property: Property, address: u24, buffer: []con
                 if (len <= buffer.len)
                     break std.mem.readIntSliceLittle(std.meta.Int(.unsigned, len * 8), buffer);
             };
-            self.setRaw(property, address, value);
+            self.setRaw(key, value);
         },
     }
 }
