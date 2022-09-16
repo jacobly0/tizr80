@@ -182,10 +182,16 @@ const State = struct {
         self.mode = mode;
     }
     pub fn setAdlInstruction(self: *State) error{}!void {
-        self.core.cpu.set(.adl, @enumToInt(self.mode.inst));
+        self.core.cpu.mode.adl = switch (self.mode.inst) {
+            .s => .z80,
+            .l => .ez80,
+        };
     }
     pub fn setAdlImmediate(self: *State) error{}!void {
-        self.core.cpu.set(.adl, @enumToInt(self.mode.imm));
+        self.core.cpu.mode.adl = switch (self.mode.imm) {
+            .is => .z80,
+            .il => .ez80,
+        };
     }
 
     pub fn halt(self: *State) error{}!void {
@@ -364,13 +370,57 @@ const State = struct {
         }
     }
 
+    pub fn rst(self: *State) error{}!void {
+        self.addCycles(1);
+        if (self.mode.suffix) {
+            const pc = @intCast(u24, self.accumulator);
+
+            if (self.core.cpu.mode.adl == .ez80) {
+                self.address = self.core.cpu.spl.long;
+                try self.addAddress(-1);
+                self.accumulator = @truncate(u8, pc >> 16);
+                try self.writeMemoryByte();
+
+                try self.addAddress(-1);
+                self.accumulator = util.toBacking(self.core.cpu.mode);
+                try self.writeMemoryByte();
+                self.core.cpu.spl.long = @intCast(u24, self.address);
+            }
+
+            try self.loadStackPointerInstruction();
+            try self.addAddress(-1);
+            try self.maskAddressInstruction();
+            self.accumulator = @truncate(u8, pc >> 8);
+            try self.writeMemoryByte();
+
+            try self.addAddress(-1);
+            try self.maskAddressInstruction();
+            self.accumulator = @truncate(u8, pc >> 0);
+            try self.writeMemoryByte();
+            try self.storeStackPointerInstruction();
+
+            if (self.core.cpu.mode.adl == .z80) {
+                self.address = self.core.cpu.spl.long;
+                try self.addAddress(-1);
+                self.accumulator = util.toBacking(self.core.cpu.mode);
+                try self.writeMemoryByte();
+                self.core.cpu.spl.long = @intCast(u24, self.address);
+            }
+        } else {
+            try self.loadStackPointerInstruction();
+            try self.addAddress(-1);
+            try self.maskAddressInstruction();
+            try self.writeMemoryWord(.reverse);
+            try self.storeStackPointerInstruction();
+        }
+    }
     fn call(self: *State, mixed: bool) void {
         if (mixed) {
             const pc = @intCast(u24, self.accumulator);
             if (self.mode.imm == .il) try self.addR(1);
 
             if (self.core.cpu.mode.adl == .ez80) {
-                self.address = self.core.cpu.get(.spl);
+                self.address = self.core.cpu.spl.long;
                 try self.addAddress(-1);
                 self.accumulator = @truncate(u8, pc >> 16);
                 try self.writeMemoryByte();
@@ -380,7 +430,7 @@ const State = struct {
                     self.accumulator = util.toBacking(self.core.cpu.mode);
                     try self.writeMemoryByte();
                 }
-                self.core.cpu.set(.spl, @intCast(u24, self.address));
+                self.core.cpu.spl.long = @intCast(u24, self.address);
             }
 
             const stack: decode.Mode.Instruction = if (self.mode.imm == .il or
@@ -399,17 +449,12 @@ const State = struct {
             self.storeStackPointer(stack);
 
             if (self.mode.imm == .il or self.core.cpu.mode.adl == .z80) {
-                self.address = self.core.cpu.get(.spl);
+                self.address = self.core.cpu.spl.long;
                 try self.addAddress(-1);
                 self.accumulator = util.toBacking(self.core.cpu.mode);
                 try self.writeMemoryByte();
-                self.core.cpu.set(.spl, @intCast(u24, self.address));
+                self.core.cpu.spl.long = @intCast(u24, self.address);
             }
-
-            self.core.cpu.mode.adl = switch (self.mode.imm) {
-                .is => .z80,
-                .il => .ez80,
-            };
         } else {
             try self.loadStackPointerInstruction();
             try self.addAddress(-1);
