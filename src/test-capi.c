@@ -33,7 +33,7 @@ static void test_cpu_registers(cemucore_t *core) {
     cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_SPS, 0x26AE);
     cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_SPL, 0x37BF05);
     cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_PC, 0xAF16B2);
-    cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_I, 0x7C38);
+    cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_UI, 0x7C38);
     cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_R, 0xD4);
     cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_MB, 0x9E);
 
@@ -94,7 +94,7 @@ static void test_cpu_registers(cemucore_t *core) {
     expect(UINT16_C(0xBE04) == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_REG_IX));
     expect(UINT16_C(0x159D) == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_REG_IY));
     expect(UINT16_C(0x26AE) == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_REG_SPS));
-    expect(UINT16_C(0x7C38) == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_REG_I));
+    expect(UINT16_C(0x7C38) == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_REG_UI));
 
     expect(UINT16_C(0xCE13) == cemucore_get(core, CEMUCORE_PROP_REG_SHADOW, CEMUCORE_REG_AF));
     expect(UINT16_C(0x9ACE) == cemucore_get(core, CEMUCORE_PROP_REG_SHADOW, CEMUCORE_REG_BC));

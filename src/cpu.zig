@@ -47,6 +47,7 @@ pub const RegisterId = enum {
     iyl,
     iyh,
     iyu,
+    i,
     r,
     mb,
 
@@ -58,7 +59,7 @@ pub const RegisterId = enum {
     ix,
     iy,
     sps,
-    i,
+    ui,
 
     // 24-bit registers
     ubc,
@@ -67,6 +68,7 @@ pub const RegisterId = enum {
     uix,
     uiy,
     spl,
+    mbi,
     pc,
 };
 
@@ -183,7 +185,7 @@ pub fn setR(self: *Cpu, value: u8) void {
     self.r = std.math.rotl(u8, value, 1);
 }
 pub fn addR(self: *Cpu, comptime offset: comptime_int) void {
-    self.r += offset << 1;
+    self.r +%= offset << 1;
 }
 
 pub fn get(self: *const Cpu, id: RegisterId) u24 {
@@ -220,6 +222,7 @@ pub fn get(self: *const Cpu, id: RegisterId) u24 {
         .iyl => self.iy.byte.low,
         .iyh => self.iy.byte.high,
         .iyu => self.iy.byte.upper,
+        .i => self.mbi.byte.low,
         .r => self.getR(),
         .mb => self.mbi.ext.upper,
 
@@ -231,7 +234,7 @@ pub fn get(self: *const Cpu, id: RegisterId) u24 {
         .ix => self.ix.word.word,
         .iy => self.iy.word.word,
         .sps => self.sps.word,
-        .i => self.mbi.ext.word,
+        .ui => self.mbi.ext.word,
 
         // 24-bit registers
         .ubc => self.bc.long,
@@ -240,6 +243,7 @@ pub fn get(self: *const Cpu, id: RegisterId) u24 {
         .uix => self.ix.long,
         .uiy => self.iy.long,
         .spl => self.spl.long,
+        .mbi => self.mbi.long,
         .pc => self.epc.long,
     };
 }
@@ -272,20 +276,20 @@ pub fn getShadow(self: *const Cpu, id: RegisterId) u24 {
         .l => self.@"hl'".byte.low,
         .h => self.@"hl'".byte.high,
         .hlu => self.@"hl'".byte.upper,
-        .ixl, .ixh, .ixu, .iyu, .iyl, .iyh, .r, .mb => unreachable,
+        .ixl, .ixh, .ixu, .iyu, .iyl, .iyh, .i, .r, .mb => unreachable,
 
         // 16-bit registers
         .af => self.@"af'".word.word,
         .bc => self.@"bc'".word.word,
         .de => self.@"de'".word.word,
         .hl => self.@"hl'".word.word,
-        .ix, .iy, .sps, .i => unreachable,
+        .ix, .iy, .sps, .ui => unreachable,
 
         // 24-bit registers
         .ubc => self.@"bc'".long,
         .ude => self.@"de'".long,
         .uhl => self.@"hl'".long,
-        .uix, .uiy, .spl => unreachable,
+        .uix, .uiy, .spl, .mbi => unreachable,
         .pc => self.pc.long,
     };
 }
@@ -328,6 +332,7 @@ pub fn set(self: *Cpu, id: RegisterId, value: u24) void {
         .iyl => self.iy.byte.low = @intCast(u8, value),
         .iyh => self.iy.byte.high = @intCast(u8, value),
         .iyu => self.iy.byte.upper = @intCast(u8, value),
+        .i => self.mbi.byte.low = @intCast(u8, value),
         .r => self.setR(@intCast(u8, value)),
         .mb => self.mbi.ext.upper = @intCast(u8, value),
 
@@ -343,7 +348,7 @@ pub fn set(self: *Cpu, id: RegisterId, value: u24) void {
         .ix => self.ix.word.word = @intCast(u16, value),
         .iy => self.iy.word.word = @intCast(u16, value),
         .sps => self.sps.word = @intCast(u16, value),
-        .i => self.mbi.ext.word = @intCast(u16, value),
+        .ui => self.mbi.ext.word = @intCast(u16, value),
 
         // 24-bit registers
         .ubc => self.bc.long = value,
@@ -352,6 +357,7 @@ pub fn set(self: *Cpu, id: RegisterId, value: u24) void {
         .uix => self.ix.long = value,
         .uiy => self.iy.long = value,
         .spl => self.spl.long = value,
+        .mbi => self.mbi.long = value,
         .pc => {
             self.epc.long = value;
             self.backend.flush = true;
@@ -387,20 +393,20 @@ pub fn setShadow(self: *Cpu, id: RegisterId, value: u24) void {
         .l => self.@"de'".byte.low = @intCast(u8, value),
         .h => self.@"de'".byte.high = @intCast(u8, value),
         .hlu => self.@"hl'".byte.upper = @intCast(u8, value),
-        .ixl, .ixh, .ixu, .iyu, .iyl, .iyh, .r, .mb => unreachable,
+        .ixl, .ixh, .ixu, .iyu, .iyl, .iyh, .i, .r, .mb => unreachable,
 
         // 16-bit registers
         .af => self.@"af'".word.word = @intCast(u16, value),
         .bc => self.@"bc'".word.word = @intCast(u16, value),
         .de => self.@"de'".word.word = @intCast(u16, value),
         .hl => self.@"hl'".word.word = @intCast(u16, value),
-        .ix, .iy, .sps, .i => unreachable,
+        .ix, .iy, .sps, .ui => unreachable,
 
         // 24-bit registers
         .ubc => self.@"bc'".long = value,
         .ude => self.@"de'".long = value,
         .uhl => self.@"hl'".long = value,
-        .uix, .uiy, .spl => unreachable,
+        .uix, .uiy, .spl, .mbi => unreachable,
         .pc => self.pc.long = value,
     }
 }
@@ -423,7 +429,7 @@ test "registers" {
     cpu.set(.sps, 0x26AE);
     cpu.set(.spl, 0x37BF05);
     cpu.set(.pc, 0xAF16B2);
-    cpu.set(.i, 0x7C38);
+    cpu.set(.ui, 0x7C38);
     cpu.set(.r, 0xD4);
     cpu.set(.mb, 0x9E);
 
@@ -484,7 +490,7 @@ test "registers" {
     try std.testing.expectEqual(@as(u16, 0xBE04), @intCast(u16, cpu.get(.ix)));
     try std.testing.expectEqual(@as(u16, 0x159D), @intCast(u16, cpu.get(.iy)));
     try std.testing.expectEqual(@as(u16, 0x26AE), @intCast(u16, cpu.get(.sps)));
-    try std.testing.expectEqual(@as(u16, 0x7C38), @intCast(u16, cpu.get(.i)));
+    try std.testing.expectEqual(@as(u16, 0x7C38), @intCast(u16, cpu.get(.ui)));
 
     try std.testing.expectEqual(@as(u16, 0xCE13), @intCast(u16, cpu.getShadow(.af)));
     try std.testing.expectEqual(@as(u16, 0x9ACE), @intCast(u16, cpu.getShadow(.bc)));

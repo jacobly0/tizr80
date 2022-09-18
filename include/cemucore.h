@@ -103,6 +103,7 @@ typedef enum cemucore_reg {
     CEMUCORE_REG_IYL,
     CEMUCORE_REG_IYH,
     CEMUCORE_REG_IYU,
+    CEMUCORE_REG_I,
     CEMUCORE_REG_R,
     CEMUCORE_REG_MB,
 
@@ -114,7 +115,7 @@ typedef enum cemucore_reg {
     CEMUCORE_REG_IX,
     CEMUCORE_REG_IY,
     CEMUCORE_REG_SPS,
-    CEMUCORE_REG_I,
+    CEMUCORE_REG_UI,
 
     /* 24-bit registers */
     CEMUCORE_REG_UBC,

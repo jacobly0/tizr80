@@ -145,6 +145,7 @@ pub const cemucore_reg = enum(c_int) {
     CEMUCORE_REG_IYL,
     CEMUCORE_REG_IYH,
     CEMUCORE_REG_IYU,
+    CEMUCORE_REG_I,
     CEMUCORE_REG_R,
     CEMUCORE_REG_MB,
 
@@ -156,7 +157,7 @@ pub const cemucore_reg = enum(c_int) {
     CEMUCORE_REG_IX,
     CEMUCORE_REG_IY,
     CEMUCORE_REG_SPS,
-    CEMUCORE_REG_I,
+    CEMUCORE_REG_UI,
 
     // 24-bit registers
     CEMUCORE_REG_UBC,
@@ -196,6 +197,7 @@ pub const cemucore_reg = enum(c_int) {
             .CEMUCORE_REG_IYL => .iyl,
             .CEMUCORE_REG_IYH => .iyh,
             .CEMUCORE_REG_IYU => .iyu,
+            .CEMUCORE_REG_I => .i,
             .CEMUCORE_REG_R => .r,
             .CEMUCORE_REG_MB => .mb,
             .CEMUCORE_REG_AF => .af,
@@ -205,7 +207,7 @@ pub const cemucore_reg = enum(c_int) {
             .CEMUCORE_REG_IX => .ix,
             .CEMUCORE_REG_IY => .iy,
             .CEMUCORE_REG_SPS => .sps,
-            .CEMUCORE_REG_I => .i,
+            .CEMUCORE_REG_UI => .ui,
             .CEMUCORE_REG_UBC => .ubc,
             .CEMUCORE_REG_UDE => .ude,
             .CEMUCORE_REG_UHL => .uhl,
