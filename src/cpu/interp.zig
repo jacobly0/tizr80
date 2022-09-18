@@ -84,6 +84,7 @@ const State = struct {
     mode: Decode.Mode = undefined,
     accumulator: i32 = undefined,
     address: i32 = undefined,
+    repeat_counter: u1 = 0,
 
     pub fn reset(self: *State) error{}!void {
         self.mode = Decode.Mode.fromAdl(self.core.cpu.mode.adl);
@@ -190,6 +191,9 @@ const State = struct {
             .il => .ez80,
         };
     }
+    pub fn setInterruptMode(self: *State, comptime im: comptime_int) error{}!void {
+        self.core.cpu.set(.im, im);
+    }
 
     pub fn halt(self: *State) error{}!void {
         self.interp.halted = true;
@@ -264,6 +268,16 @@ const State = struct {
         const word = @intCast(u16, self.accumulator);
         self.core.cpu.set(id, word >> 8);
         self.accumulator = @truncate(u8, word);
+    }
+    pub fn storeRegisterInstruction(
+        self: *State,
+        comptime partial: Cpu.RegisterId,
+        comptime full: Cpu.RegisterId,
+    ) error{}!void {
+        try switch (self.mode.inst) {
+            .s => self.storeRegister(partial),
+            .l => self.storeRegister(full),
+        };
     }
     pub fn storeShadowRegister(self: *State, comptime id: Cpu.RegisterId) error{}!void {
         self.core.cpu.setShadow(id, @intCast(u24, self.accumulator));
@@ -637,13 +651,20 @@ const State = struct {
     pub fn setByte(self: *State, comptime bit: u3) error{}!void {
         self.accumulator |= 1 << bit;
     }
-    fn parityZeroSign(self: *State, byte: u8) void {
-        self.core.cpu.pv = @popCount(byte) & 1 == 0;
-        self.core.cpu.zf = byte == 0;
-        self.core.cpu.sf = @bitCast(i8, byte) < 0;
+    pub fn setSubtractByteSign(self: *State) error{}!void {
+        self.core.cpu.nf = @bitCast(i8, @intCast(u8, self.accumulator)) < 0;
     }
-    pub fn parityZeroSignByte(self: *State) error{}!void {
-        self.parityZeroSign(@intCast(u8, self.accumulator));
+    pub fn setParityByte(self: *State) error{}!void {
+        self.core.cpu.pv = @popCount(@intCast(u8, self.accumulator)) & 1 == 0;
+    }
+    pub fn setZeroByte(self: *State) error{}!void {
+        self.core.cpu.zf = @intCast(u8, self.accumulator) == 0;
+    }
+    pub fn setZeroWord(self: *State) error{}!void {
+        self.core.cpu.zf = @intCast(u24, self.accumulator) == 0;
+    }
+    pub fn setSignByte(self: *State) error{}!void {
+        self.core.cpu.sf = @bitCast(i8, @intCast(u8, self.accumulator)) < 0;
     }
     fn setCarry(self: *State, value: bool) void {
         self.core.cpu.cf = value;
@@ -675,11 +696,31 @@ const State = struct {
         self.core.cpu.sf = signed_result < 0;
         self.accumulator = @bitCast(u8, signed_result);
     }
+    pub fn addByteHalfZeroSign(self: *State, comptime rhs: comptime_int) error{}!void {
+        const unsigned_lhs = @intCast(u8, self.accumulator);
+        const unsigned_rhs = @bitCast(u8, @as(i8, rhs));
+        const unsigned_result = unsigned_lhs +% unsigned_rhs;
+
+        self.core.cpu.cf = false;
+        self.core.cpu.pv = false;
+
+        const low_lhs = @truncate(u4, unsigned_lhs);
+        const low_rhs = @truncate(u4, unsigned_rhs);
+        var low_result: u4 = undefined;
+        self.core.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) != (rhs < 0);
+
+        self.core.cpu.zf = unsigned_result == 0;
+        self.core.cpu.sf = @bitCast(i8, unsigned_result) < 0;
+        self.accumulator = unsigned_result;
+    }
     fn addWordByte(word: *i32, byte: i8) void {
         word.* = @bitCast(u24, @bitCast(i24, @intCast(u24, word.*)) +% byte);
     }
     pub fn addWord(self: *State, comptime offset: comptime_int) error{}!void {
         addWordByte(&self.accumulator, offset);
+    }
+    pub fn subWordSuffix(self: *State) error{}!void {
+        if (self.mode.suffix) try self.addWord(-1);
     }
     pub fn addOffset(self: *State) error{}!void {
         addWordByte(&self.accumulator, @bitCast(i8, @intCast(u8, self.address)));
@@ -819,9 +860,12 @@ const State = struct {
     }
     const Digits = packed struct(u16) { mem_low: u4, mem_high: u4, a_low: u4, a_high: u4 };
     fn rdBytesFlags(self: *State) void {
+        const byte = @truncate(u8, @intCast(u16, self.accumulator) >> 8);
         self.core.cpu.nf = false;
+        self.core.cpu.pv = @popCount(byte) & 1 == 0;
         self.core.cpu.hc = false;
-        self.parityZeroSign(@truncate(u8, @intCast(u16, self.accumulator) >> 8));
+        self.core.cpu.zf = byte == 0;
+        self.core.cpu.sf = @bitCast(i8, byte) < 0;
     }
     pub fn rrdBytes(self: *State) error{}!void {
         const digits = util.fromBacking(Digits, @intCast(u16, self.accumulator));
@@ -941,6 +985,36 @@ const State = struct {
             .l => self.sbcWordsWidth(24),
         }
     }
+
+    pub fn ldFlags(self: *State) error{}!void {
+        self.core.cpu.nf = false;
+        self.core.cpu.hc = false;
+    }
+    pub fn cpFlags(self: *State) error{}!void {
+        const lhs = @intCast(u8, self.accumulator);
+        const rhs = @intCast(u8, self.address);
+        const result = lhs -% rhs;
+
+        self.core.cpu.nf = true;
+
+        const low_lhs = @truncate(u4, lhs);
+        const low_rhs = @truncate(u4, rhs);
+        var low_result: u4 = undefined;
+        self.core.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result);
+
+        self.core.cpu.zf = result == 0;
+        self.core.cpu.sf = @bitCast(i8, result) < 0;
+    }
+    pub fn repeatFlag(self: *State) error{}!void {
+        self.core.cpu.pv = self.accumulator != 0;
+    }
+    pub fn repeat(self: *State) error{RepeatInstruction}!void {
+        self.repeat_counter = 1;
+        return switch (self.repeat_counter) {
+            0 => {},
+            1 => Decode.Error.RepeatInstruction,
+        };
+    }
 };
 
 fn consumeStrZ(buffer: *[:0]const u8) [:0]const u8 {
@@ -1043,6 +1117,7 @@ test "ezex" {
                                 .ez80 => 0x119,
                             })),
                         );
+                        if (false) std.mem.writeIntLittle(u32, output[16..20], 0);
                         std.mem.writeIntLittle(u8, output[20..21], util.toBacking(Cpu.Flags{
                             .cf = false,
                             .nf = false,
@@ -1054,6 +1129,19 @@ test "ezex" {
                             .sf = @bitCast(i8, core.cpu.getR()) < 0,
                         }));
                         std.mem.writeIntLittle(u8, output[21..22], core.cpu.getR());
+                        if (false) {
+                            std.mem.writeIntLittle(u8, output[20..21], util.toBacking(Cpu.Flags{
+                                .cf = false,
+                                .nf = false,
+                                .pv = true,
+                                .xf = core.cpu.getShadow(.xf) != 0,
+                                .hc = false,
+                                .yf = core.cpu.getShadow(.yf) != 0,
+                                .zf = true,
+                                .sf = false,
+                            }));
+                            std.mem.writeIntLittle(u8, output[21..22], 0);
+                        }
                         const i = core.cpu.mbi.word.word;
                         std.mem.writeIntLittle(u16, output[22..24], i +% core.cpu.sps.word);
                         std.mem.writeIntLittle(u16, output[24..26], i);

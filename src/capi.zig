@@ -113,9 +113,10 @@ pub const cemucore_transfer = enum(c_int) {
 };
 
 pub const cemucore_reg = enum(c_int) {
-    // 1-bit state
+    // state
     CEMUCORE_STATE_ADL,
     CEMUCORE_STATE_IEF,
+    CEMUCORE_STATE_IM,
 
     // 1-bit flags
     CEMUCORE_FLAG_C,
@@ -172,6 +173,7 @@ pub const cemucore_reg = enum(c_int) {
         return switch (self) {
             .CEMUCORE_STATE_ADL => .adl,
             .CEMUCORE_STATE_IEF => .ief,
+            .CEMUCORE_STATE_IM => .im,
             .CEMUCORE_FLAG_C => .cf,
             .CEMUCORE_FLAG_N => .nf,
             .CEMUCORE_FLAG_PV => .pv,

@@ -15,9 +15,10 @@ pub const Backend = struct {
 };
 
 pub const RegisterId = enum {
-    // 1-bit state
+    // state
     adl,
     ief,
+    im,
 
     // 1-bit flags
     cf,
@@ -141,6 +142,8 @@ mode: Mode = .{ .adl = .z80, .madl = .z80 },
 ief1: Flag = false,
 ief2: Flag = false,
 
+im: u2 = 1,
+
 cycles: u64 = 0,
 
 backend: *Backend,
@@ -185,14 +188,15 @@ pub fn setR(self: *Cpu, value: u8) void {
     self.r = std.math.rotl(u8, value, 1);
 }
 pub fn addR(self: *Cpu, comptime offset: comptime_int) void {
-    self.r +%= offset << 1;
+    self.r = @bitCast(u8, @bitCast(i8, self.r) +% (offset << 1));
 }
 
 pub fn get(self: *const Cpu, id: RegisterId) u24 {
     return switch (id) {
-        // 1-bit state
+        // state
         .adl => @enumToInt(self.mode.adl),
         .ief => @boolToInt(self.ief1),
+        .im => self.im,
 
         // 1-bit flags
         .cf => @boolToInt(self.cf),
@@ -250,9 +254,10 @@ pub fn get(self: *const Cpu, id: RegisterId) u24 {
 
 pub fn getShadow(self: *const Cpu, id: RegisterId) u24 {
     return switch (id) {
-        // 1-bit state
+        // state
         .adl => @enumToInt(self.mode.madl),
         .ief => @boolToInt(self.ief2),
+        .im => unreachable,
 
         // 1-bit flags
         .cf => @boolToInt(self.@"af'".flags.cf),
@@ -296,11 +301,15 @@ pub fn getShadow(self: *const Cpu, id: RegisterId) u24 {
 
 pub fn set(self: *Cpu, id: RegisterId, value: u24) void {
     switch (id) {
-        // 1-bit state
+        // state
         .adl => self.mode.adl = @intToEnum(Adl, value),
         .ief => {
             self.ief1 = @intCast(u1, value) != 0;
             self.setShadow(.ief, value);
+        },
+        .im => {
+            std.debug.assert(value < 2);
+            self.im = @intCast(u2, value);
         },
 
         // 1-bit flags
@@ -367,9 +376,10 @@ pub fn set(self: *Cpu, id: RegisterId, value: u24) void {
 
 pub fn setShadow(self: *Cpu, id: RegisterId, value: u24) void {
     switch (id) {
-        // 1-bit state
+        // state
         .adl => self.mode.madl = @intToEnum(Adl, value),
         .ief => self.ief2 = @intCast(u1, value) != 0,
+        .im => unreachable,
 
         // 1-bit flags
         .cf => self.@"af'".flags.cf = @intCast(u1, value) != 0,

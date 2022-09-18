@@ -53,6 +53,13 @@ pub fn writeByte(self: *Memory, address: u24, value: u8) void {
 pub fn readPortByte(self: *Memory, address: u16) u8 {
     return switch (address) {
         0x0020...0x0025 => self.port0[address - 0x0020],
+        0x0120...0x0125 => self.port0[address - 0x0120],
+        0x0220...0x0225 => self.port0[address - 0x0220],
+        0x0320...0x0325 => self.port0[address - 0x0320],
+        0x0420...0x0425 => self.port0[address - 0x0420],
+        0x0520...0x0525 => self.port0[address - 0x0520],
+        0x0620...0x0625 => self.port0[address - 0x0620],
+        0x0720...0x0725 => self.port0[address - 0x0720],
         0x4800...0x4BFF => self.cursor[address - 0x4800],
         else => {
             std.debug.print("\n0x{X:0>4}\n", .{address});
@@ -63,6 +70,13 @@ pub fn readPortByte(self: *Memory, address: u16) u8 {
 pub fn writePortByte(self: *Memory, address: u16, value: u8) void {
     switch (address) {
         0x0020...0x0025 => self.port0[address - 0x0020] = value,
+        0x0120...0x0125 => self.port0[address - 0x0120] = value,
+        0x0220...0x0225 => self.port0[address - 0x0220] = value,
+        0x0320...0x0325 => self.port0[address - 0x0320] = value,
+        0x0420...0x0425 => self.port0[address - 0x0420] = value,
+        0x0520...0x0525 => self.port0[address - 0x0520] = value,
+        0x0620...0x0625 => self.port0[address - 0x0620] = value,
+        0x0720...0x0725 => self.port0[address - 0x0720] = value,
         0x4800...0x4BFF => self.cursor[address - 0x4800] = value,
         else => {
             std.debug.print("\n0x{X:0>4}\n", .{address});
@@ -99,7 +113,7 @@ pub fn writeCpuByte(self: *Memory, address: u24, value: u8) void {
 }
 pub fn readCpuPortByte(self: *Memory, address: u16) u8 {
     self.addCycles(switch (address) {
-        0x0020...0x0025 => 2,
+        0x0000...0x0FFF => 2,
         0x4800...0x4BFF => 3,
         else => {
             std.debug.print("\n0x{X:0>4}\n", .{address});
@@ -110,7 +124,7 @@ pub fn readCpuPortByte(self: *Memory, address: u16) u8 {
 }
 pub fn writeCpuPortByte(self: *Memory, address: u16, value: u8) void {
     self.addCycles(switch (address) {
-        0x0020...0x0025 => 2,
+        0x0000...0x0FFF => 2,
         0x4800...0x4BFF => 2,
         else => {
             std.debug.print("\n0x{X:0>4}\n", .{address});
