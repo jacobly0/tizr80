@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const CEmuCore = @import("../cemucore.zig");
 const Cpu = @import("../cpu.zig");
 
 pub fn create(allocator: std.mem.Allocator) !*Cpu.Backend {
@@ -14,7 +13,7 @@ pub fn create(allocator: std.mem.Allocator) !*Cpu.Backend {
     return backend;
 }
 
-fn execute(_: *Cpu.Backend, _: *CEmuCore, _: Cpu.ExecuteMode) void {}
+fn execute(_: *Cpu.Backend, _: *Cpu, _: Cpu.ExecuteMode) void {}
 
 fn destroy(backend: *Cpu.Backend, allocator: std.mem.Allocator) void {
     allocator.destroy(backend);

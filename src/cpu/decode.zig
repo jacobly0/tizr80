@@ -173,12 +173,12 @@ const Uop = enum {
     fetch_word,
     fetch_word_flush,
 
-    read_port,
-    read_port_f,
+    in,
+    in_f,
     read_byte,
     read_word,
 
-    write_port,
+    out,
     write_byte,
     write_word,
     write_word_rev,
@@ -477,7 +477,7 @@ const ez80 = struct {
         &[_]Uop{ .add_cc_1, .nc, .flush, .add_r_1, .ret, .store_pc, .add_cc_1 }, // ret nc
         &[_]Uop{ .load_sp, .mask_addr_inst, .read_word, .store_de, .inc_addr, .mask_addr_inst, .store_sp }, // pop de
         &[_]Uop{ .fetch_word_flush, .nc, .add_cc_1, .mask_word_inst, .store_pc, .set_adl_inst }, // jp nc,nn
-        &[_]Uop{ .fetch_byte, .load_a_high, .save, .load_a, .write_port }, // out (n),a
+        &[_]Uop{ .fetch_byte, .load_a_high, .save, .load_a, .out }, // out (n),a
         &[_]Uop{ .fetch_word_flush, .nc, .add_cc_call, .ex_pc, .call, .set_adl_imm }, // call nc,nn
         &[_]Uop{ .add_r_inst, .load_sp, .dec_addr, .mask_addr_inst, .load_de, .write_word_rev, .store_sp }, // push de
         &[_]Uop{ .fetch_byte, .save, .load_a, .sub_bytes, .store_a }, // sub a,n
@@ -485,7 +485,7 @@ const ez80 = struct {
         &[_]Uop{ .add_cc_1, .c, .flush, .add_r_1, .ret, .store_pc, .add_cc_1 }, // ret c
         &[_]Uop{ .load_bc, .@"ex_bc'", .store_bc, .load_de, .@"ex_de'", .store_de, .load_hl, .@"ex_hl'", .store_hl }, // exx
         &[_]Uop{ .fetch_word_flush, .c, .add_cc_1, .mask_word_inst, .store_pc, .set_adl_inst }, // jp c,nn
-        &[_]Uop{ .fetch_byte, .load_a_high, .save, .read_port, .store_a }, // in a,(n)
+        &[_]Uop{ .fetch_byte, .load_a_high, .save, .in, .store_a }, // in a,(n)
         &[_]Uop{ .fetch_word_flush, .c, .add_cc_call, .ex_pc, .call, .set_adl_imm }, // call c,nn
         &[_]Uop{ .add_r_1, .fetch_byte, .dispatch_dd }, // DD
         &[_]Uop{ .fetch_byte, .save, .load_a, .sbc_bytes, .store_a }, // sbc a,n
@@ -1302,55 +1302,55 @@ const ez80 = struct {
     };
 
     const ed = [_][]const Uop{
-        &[_]Uop{ .fetch_byte, .save, .read_port_f, .pzs_byte, .store_b }, // in0 b,(n)
-        &[_]Uop{ .fetch_byte, .save, .load_b, .write_port }, // out0 (n),b
+        &[_]Uop{ .fetch_byte, .save, .in_f, .pzs_byte, .store_b }, // in0 b,(n)
+        &[_]Uop{ .fetch_byte, .save, .load_b, .out }, // out0 (n),b
         &[_]Uop{ .fetch_byte, .save, .load_ix, .add_offset, .mask_word_inst, .store_bc }, // lea bc,ix+d
         &[_]Uop{ .fetch_byte, .save, .load_iy, .add_offset, .mask_word_inst, .store_bc }, // lea bc,iy+d
         &[_]Uop{ .load_b, .save, .load_a, .and_bytes, .pzs_byte }, // tst a,b
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_word, .store_bc }, // ld bc,(hl)
-        &[_]Uop{ .fetch_byte, .save, .read_port_f, .pzs_byte, .store_c }, // in0 c,(n)
-        &[_]Uop{ .fetch_byte, .save, .load_c, .write_port }, // out0 (n),c
+        &[_]Uop{ .fetch_byte, .save, .in_f, .pzs_byte, .store_c }, // in0 c,(n)
+        &[_]Uop{ .fetch_byte, .save, .load_c, .out }, // out0 (n),c
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_c, .save, .load_a, .and_bytes, .pzs_byte }, // tst a,c
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .load_bc, .write_word }, // ld (hl),bc
-        &[_]Uop{ .fetch_byte, .save, .read_port_f, .pzs_byte, .store_d }, // in0 d,(n)
-        &[_]Uop{ .fetch_byte, .save, .load_d, .write_port }, // out0 (n),d
+        &[_]Uop{ .fetch_byte, .save, .in_f, .pzs_byte, .store_d }, // in0 d,(n)
+        &[_]Uop{ .fetch_byte, .save, .load_d, .out }, // out0 (n),d
         &[_]Uop{ .fetch_byte, .save, .load_ix, .add_offset, .mask_word_inst, .store_de }, // lea de,ix+d
         &[_]Uop{ .fetch_byte, .save, .load_iy, .add_offset, .mask_word_inst, .store_de }, // lea de,iy+d
         &[_]Uop{ .load_d, .save, .load_a, .and_bytes, .pzs_byte }, // tst a,d
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_word, .store_de }, // ld de,(hl)
-        &[_]Uop{ .fetch_byte, .save, .read_port_f, .pzs_byte, .store_e }, // in0 e,(n)
-        &[_]Uop{ .fetch_byte, .save, .load_e, .write_port }, // out0 (n),e
+        &[_]Uop{ .fetch_byte, .save, .in_f, .pzs_byte, .store_e }, // in0 e,(n)
+        &[_]Uop{ .fetch_byte, .save, .load_e, .out }, // out0 (n),e
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_e, .save, .load_a, .and_bytes, .pzs_byte }, // tst a,e
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .load_de, .write_word }, // ld (hl),de
-        &[_]Uop{ .fetch_byte, .save, .read_port_f, .pzs_byte, .store_h }, // in0 h,(n)
-        &[_]Uop{ .fetch_byte, .save, .load_h, .write_port }, // out0 (n),h
+        &[_]Uop{ .fetch_byte, .save, .in_f, .pzs_byte, .store_h }, // in0 h,(n)
+        &[_]Uop{ .fetch_byte, .save, .load_h, .out }, // out0 (n),h
         &[_]Uop{ .fetch_byte, .save, .load_ix, .add_offset, .mask_word_inst, .store_hl }, // lea hl,ix+d
         &[_]Uop{ .fetch_byte, .save, .load_iy, .add_offset, .mask_word_inst, .store_hl }, // lea hl,iy+d
         &[_]Uop{ .load_h, .save, .load_a, .and_bytes, .pzs_byte }, // tst a,h
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_word, .store_hl }, // ld hl,(hl)
-        &[_]Uop{ .fetch_byte, .save, .read_port_f, .pzs_byte, .store_l }, // in0 l,(n)
-        &[_]Uop{ .fetch_byte, .save, .load_l, .write_port }, // out0 (n),l
+        &[_]Uop{ .fetch_byte, .save, .in_f, .pzs_byte, .store_l }, // in0 l,(n)
+        &[_]Uop{ .fetch_byte, .save, .load_l, .out }, // out0 (n),l
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_l, .save, .load_a, .and_bytes, .pzs_byte }, // tst a,l
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .write_word }, // ld (hl),hl
-        &[_]Uop{ .fetch_byte, .save, .read_port_f, .pzs_byte }, // in0 (n)
+        &[_]Uop{ .fetch_byte, .save, .in_f, .pzs_byte }, // in0 (n)
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_word, .store_iy }, // ld iy,(hl)
         &[_]Uop{ .fetch_byte, .save, .load_ix, .add_offset, .mask_word_inst, .store_ix }, // lea ix,ix+d
         &[_]Uop{ .fetch_byte, .save, .load_iy, .add_offset, .mask_word_inst, .store_iy }, // lea iy,iy+d
@@ -1358,72 +1358,72 @@ const ez80 = struct {
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_word, .store_ix }, // ld ix,(hl)
-        &[_]Uop{ .fetch_byte, .save, .read_port_f, .pzs_byte, .store_a }, // in0 a,(n)
-        &[_]Uop{ .fetch_byte, .save, .load_a, .write_port }, // out0 (n),a
+        &[_]Uop{ .fetch_byte, .save, .in_f, .pzs_byte, .store_a }, // in0 a,(n)
+        &[_]Uop{ .fetch_byte, .save, .load_a, .out }, // out0 (n),a
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_a, .save, .and_bytes, .pzs_byte }, // tst a,a
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .load_iy, .write_word }, // ld (hl),iy
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .load_ix, .write_word }, // ld (hl),ix
-        &[_]Uop{ .load_bc, .save, .read_port_f, .pzs_byte, .store_b }, // in b,(bc)
-        &[_]Uop{ .load_bc, .save, .load_b, .write_port }, // out (bc),b
+        &[_]Uop{ .load_bc, .save, .in_f, .pzs_byte, .store_b }, // in b,(bc)
+        &[_]Uop{ .load_bc, .save, .load_b, .out }, // out (bc),b
         &[_]Uop{ .load_bc, .save, .load_hl, .sbc_words, .store_hl }, // sbc hl,bc
         &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .load_bc, .write_word }, // ld (nn),bc
         &[_]Uop{ .load_a, .save, .set_00h, .sub_bytes, .store_a }, // neg
         &[_]Uop{ .flush, .ret, .store_pc, .add_cc_1, .copy_ief }, // retn
         &[_]Uop{.im_0}, // im 0
         &[_]Uop{ .load_a, .store_i }, // ld i,a
-        &[_]Uop{ .load_bc, .save, .read_port_f, .pzs_byte, .store_c }, // in c,(bc)
-        &[_]Uop{ .load_bc, .save, .load_c, .write_port }, // out (bc),c
+        &[_]Uop{ .load_bc, .save, .in_f, .pzs_byte, .store_c }, // in c,(bc)
+        &[_]Uop{ .load_bc, .save, .load_c, .out }, // out (bc),c
         &[_]Uop{ .load_bc, .save, .load_hl, .adc_words, .store_hl }, // adc hl,bc
         &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .read_word, .store_bc }, // ld bc,(nn)
         &[_]Uop{ .load_bc, .add_cc_4, .mlt_bytes, .store_bc }, // mlt bc
         &[_]Uop{ .flush, .ret, .store_pc, .add_cc_1, .copy_ief }, // reti
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_a, .store_r }, // ld r,a
-        &[_]Uop{ .load_bc, .save, .read_port_f, .pzs_byte, .store_d }, // in d,(bc)
-        &[_]Uop{ .load_bc, .save, .load_d, .write_port }, // out (bc),d
+        &[_]Uop{ .load_bc, .save, .in_f, .pzs_byte, .store_d }, // in d,(bc)
+        &[_]Uop{ .load_bc, .save, .load_d, .out }, // out (bc),d
         &[_]Uop{ .load_de, .save, .load_hl, .sbc_words, .store_hl }, // sbc hl,de
         &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .load_de, .write_word }, // ld (nn),de
         &[_]Uop{ .fetch_byte, .save, .load_iy, .add_offset, .mask_word_inst, .store_ix }, // lea ix,iy+d
         &[_]Uop{ .fetch_byte, .save, .load_ix, .add_offset, .mask_word_inst, .store_iy }, // lea iy,ix+d
         &[_]Uop{.im_1}, // im 1
         &[_]Uop{ .load_i, .store_a }, // ld a,i
-        &[_]Uop{ .load_bc, .save, .read_port_f, .pzs_byte, .store_e }, // in e,(bc)
-        &[_]Uop{ .load_bc, .save, .load_e, .write_port }, // out (bc),e
+        &[_]Uop{ .load_bc, .save, .in_f, .pzs_byte, .store_e }, // in e,(bc)
+        &[_]Uop{ .load_bc, .save, .load_e, .out }, // out (bc),e
         &[_]Uop{ .load_de, .save, .load_hl, .adc_words, .store_hl }, // adc hl,de
         &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .read_word, .store_de }, // ld de,(nn)
         &[_]Uop{ .load_de, .add_cc_4, .mlt_bytes, .store_de }, // mlt de
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{.im_2}, // im 2
         &[_]Uop{ .load_r, .store_a }, // ld a,r
-        &[_]Uop{ .load_bc, .save, .read_port_f, .pzs_byte, .store_h }, // in h,(bc)
-        &[_]Uop{ .load_bc, .save, .load_h, .write_port }, // out (bc),h
+        &[_]Uop{ .load_bc, .save, .in_f, .pzs_byte, .store_h }, // in h,(bc)
+        &[_]Uop{ .load_bc, .save, .load_h, .out }, // out (bc),h
         &[_]Uop{ .load_hl, .save, .sbc_words, .store_hl }, // sbc hl,hl
         &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .load_hl, .write_word }, // ld (nn),hl
         &[_]Uop{ .fetch_byte, .save, .load_a, .and_bytes, .pzs_byte }, // tst a,n
         &[_]Uop{ .fetch_byte, .save, .load_ix, .add_offset, .load_sp, .dec_addr, .mask_addr_inst, .write_word_rev, .store_sp }, // pea ix+d
         &[_]Uop{ .fetch_byte, .save, .load_iy, .add_offset, .load_sp, .dec_addr, .mask_addr_inst, .write_word_rev, .store_sp }, // pea iy+d
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .load_a_high, .add_cc_1, .rrd_bytes, .store_a_high, .write_byte }, // rrd
-        &[_]Uop{ .load_bc, .save, .read_port_f, .pzs_byte, .store_l }, // in l,(bc)
-        &[_]Uop{ .load_bc, .save, .load_l, .write_port }, // out (bc),l
+        &[_]Uop{ .load_bc, .save, .in_f, .pzs_byte, .store_l }, // in l,(bc)
+        &[_]Uop{ .load_bc, .save, .load_l, .out }, // out (bc),l
         &[_]Uop{ .load_hl, .save, .adc_words, .store_hl }, // adc hl,hl
         &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .read_word, .store_hl }, // ld hl,(nn)
         &[_]Uop{ .load_hl, .add_cc_4, .mlt_bytes, .store_hl }, // mlt hl
         &[_]Uop{ .adl, .load_a, .store_mb }, // ld mb,a
         &[_]Uop{ .load_mb, .store_a }, // ld a,mb
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .load_a_high, .add_cc_1, .rld_bytes, .store_a_high, .write_byte }, // rld
-        &[_]Uop{ .load_bc, .save, .read_port_f, .pzs_byte }, // in (bc)
+        &[_]Uop{ .load_bc, .save, .in_f, .pzs_byte }, // in (bc)
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_sp, .load_hl, .sbc_words, .store_hl }, // sbc hl,sp
         &[_]Uop{ .fetch_word, .load_sp, .swap, .mask_addr_inst, .write_word }, // ld (nn),sp
-        &[_]Uop{ .load_c, .save, .read_port, .save, .fetch_byte, .swap, .and_bytes, .pzs_byte }, // tstio n
+        &[_]Uop{ .load_c, .save, .in, .save, .fetch_byte, .swap, .and_bytes, .pzs_byte }, // tstio n
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{.halt}, // slp
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
-        &[_]Uop{ .load_bc, .save, .read_port_f, .pzs_byte, .store_a }, // in a,(bc)
-        &[_]Uop{ .load_bc, .save, .load_a, .write_port }, // out (bc),a
+        &[_]Uop{ .load_bc, .save, .in_f, .pzs_byte, .store_a }, // in a,(bc)
+        &[_]Uop{ .load_bc, .save, .load_a, .out }, // out (bc),a
         &[_]Uop{ .load_sp, .load_hl, .adc_words, .store_hl }, // adc hl,sp
         &[_]Uop{ .fetch_word, .save, .mask_addr_inst, .read_word, .save, .store_sp }, // ld sp,(nn)
         &[_]Uop{ .load_sp, .restore, .add_cc_4, .mlt_bytes, .save, .store_sp }, // mlt sp
@@ -1432,80 +1432,80 @@ const ez80 = struct {
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
-        &[_]Uop{ .load_c, .save, .read_port, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_hl, .load_c, .add_byte_1, .store_c, .load_b, .dec_byte_hzs, .store_b }, // inim
-        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_c, .swap, .add_cc_1, .write_port, .nf_byte_sign, .load_c, .add_byte_1, .store_c, .load_b, .dec_byte_hzs, .store_b }, // otim
-        &[_]Uop{ .load_bc, .save, .read_port, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_hl, .load_c, .add_byte_1, .store_c, .load_b, .sub_byte_1, .zf_byte, .store_b }, // ini2
+        &[_]Uop{ .load_c, .save, .in, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_hl, .load_c, .add_byte_1, .store_c, .load_b, .dec_byte_hzs, .store_b }, // inim
+        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_c, .swap, .add_cc_1, .out, .nf_byte_sign, .load_c, .add_byte_1, .store_c, .load_b, .dec_byte_hzs, .store_b }, // otim
+        &[_]Uop{ .load_bc, .save, .in, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_hl, .load_c, .add_byte_1, .store_c, .load_b, .sub_byte_1, .zf_byte, .store_b }, // ini2
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
-        &[_]Uop{ .load_c, .save, .read_port, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_hl, .load_c, .sub_byte_1, .store_c, .load_b, .dec_byte_hzs, .store_b }, // indm
-        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_c, .swap, .add_cc_1, .write_port, .nf_byte_sign, .load_c, .sub_byte_1, .store_c, .load_b, .dec_byte_hzs, .store_b }, // otdm
-        &[_]Uop{ .load_bc, .save, .read_port, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_hl, .load_c, .sub_byte_1, .store_c, .load_b, .sub_byte_1, .zf_byte, .store_b }, // ind2
+        &[_]Uop{ .load_c, .save, .in, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_hl, .load_c, .sub_byte_1, .store_c, .load_b, .dec_byte_hzs, .store_b }, // indm
+        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_c, .swap, .add_cc_1, .out, .nf_byte_sign, .load_c, .sub_byte_1, .store_c, .load_b, .dec_byte_hzs, .store_b }, // otdm
+        &[_]Uop{ .load_bc, .save, .in, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_hl, .load_c, .sub_byte_1, .store_c, .load_b, .sub_byte_1, .zf_byte, .store_b }, // ind2
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
-        &[_]Uop{ .sub_r_1, .load_c, .save, .read_port, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_hl, .load_c, .add_byte_1, .store_c, .load_b, .sub_byte_1, .zf_byte, .store_b, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // inimr
-        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_c, .swap, .add_cc_1, .write_port, .nf_byte_sign, .load_c, .add_byte_1, .store_c, .load_b, .dec_byte_hzs, .store_b, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // otimr
-        &[_]Uop{ .load_de, .save, .read_port, .inc_addr, .swap, .mask_word_inst, .store_de, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_hl, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // ini2r
+        &[_]Uop{ .sub_r_1, .load_c, .save, .in, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_hl, .load_c, .add_byte_1, .store_c, .load_b, .sub_byte_1, .zf_byte, .store_b, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // inimr
+        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_c, .swap, .add_cc_1, .out, .nf_byte_sign, .load_c, .add_byte_1, .store_c, .load_b, .dec_byte_hzs, .store_b, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // otimr
+        &[_]Uop{ .load_de, .save, .in, .inc_addr, .swap, .mask_word_inst, .store_de, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_hl, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // ini2r
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
-        &[_]Uop{ .sub_r_1, .load_c, .save, .read_port, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_hl, .load_c, .sub_byte_1, .store_c, .load_b, .sub_byte_1, .zf_byte, .store_b, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // indmr
-        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_c, .swap, .add_cc_1, .write_port, .nf_byte_sign, .load_c, .sub_byte_1, .store_c, .load_b, .dec_byte_hzs, .store_b, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // otdmr
-        &[_]Uop{ .load_de, .save, .read_port, .dec_addr, .swap, .mask_word_inst, .store_de, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_hl, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_1, .repeat, .sub_r_1, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // ind2r
+        &[_]Uop{ .sub_r_1, .load_c, .save, .in, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_hl, .load_c, .sub_byte_1, .store_c, .load_b, .sub_byte_1, .zf_byte, .store_b, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // indmr
+        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_c, .swap, .add_cc_1, .out, .nf_byte_sign, .load_c, .sub_byte_1, .store_c, .load_b, .dec_byte_hzs, .store_b, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // otdmr
+        &[_]Uop{ .load_de, .save, .in, .dec_addr, .swap, .mask_word_inst, .store_de, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_hl, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_1, .repeat, .sub_r_1, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // ind2r
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_de, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .inc_addr, .restore, .mask_word_inst, .store_de, .ld_flags, .load_bc, .dec_word, .mask_word_inst, .repeat_flag, .store_bc_inst }, // ldi
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_a, .cp_flags, .load_bc, .dec_word, .mask_word_inst, .repeat_flag, .store_bc_inst }, // cpi
-        &[_]Uop{ .load_bc, .save, .read_port, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_hl, .load_b, .sub_byte_1, .zf_byte, .store_b }, // ini
-        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_bc, .swap, .add_cc_1, .write_port, .nf_byte_sign, .load_b, .sub_byte_1, .zf_byte, .store_b }, // outi
-        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_bc, .swap, .add_cc_1, .write_port, .nf_byte_sign, .load_c, .add_byte_1, .store_c, .load_b, .sub_byte_1, .zf_byte, .store_b }, // outi2
+        &[_]Uop{ .load_bc, .save, .in, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_hl, .load_b, .sub_byte_1, .zf_byte, .store_b }, // ini
+        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_bc, .swap, .add_cc_1, .out, .nf_byte_sign, .load_b, .sub_byte_1, .zf_byte, .store_b }, // outi
+        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_bc, .swap, .add_cc_1, .out, .nf_byte_sign, .load_c, .add_byte_1, .store_c, .load_b, .sub_byte_1, .zf_byte, .store_b }, // outi2
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_de, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .dec_addr, .restore, .mask_word_inst, .store_de, .ld_flags, .load_bc, .dec_word, .mask_word_inst, .repeat_flag, .store_bc_inst }, // ldd
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_a, .cp_flags, .load_bc, .dec_word, .mask_word_inst, .repeat_flag, .store_bc_inst }, // cpd
-        &[_]Uop{ .load_bc, .save, .read_port, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_hl, .load_b, .sub_byte_1, .zf_byte, .store_b }, // ind
-        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_bc, .swap, .add_cc_1, .write_port, .nf_byte_sign, .load_b, .sub_byte_1, .zf_byte, .store_b }, // outd
-        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_bc, .swap, .add_cc_1, .write_port, .nf_byte_sign, .load_c, .sub_byte_1, .store_c, .load_b, .sub_byte_1, .store_b, .zf_byte }, // outd2
+        &[_]Uop{ .load_bc, .save, .in, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_hl, .load_b, .sub_byte_1, .zf_byte, .store_b }, // ind
+        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_bc, .swap, .add_cc_1, .out, .nf_byte_sign, .load_b, .sub_byte_1, .zf_byte, .store_b }, // outd
+        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_bc, .swap, .add_cc_1, .out, .nf_byte_sign, .load_c, .sub_byte_1, .store_c, .load_b, .sub_byte_1, .store_b, .zf_byte }, // outd2
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_de, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .inc_addr, .restore, .mask_word_inst, .store_de, .ld_flags, .load_bc, .dec_word, .mask_word_inst, .repeat_flag, .store_bc_inst, .pe, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // ldir
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_a, .cp_flags, .load_bc, .dec_word, .mask_word_inst, .repeat_flag, .store_bc_inst, .add_cc_1, .nz, .pe, .add_r_2, .add_cc_1, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // cpir
-        &[_]Uop{ .load_bc, .save, .read_port, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_hl, .load_b, .sub_byte_1, .zf_byte, .store_b, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // inir
-        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_bc, .swap, .add_cc_1, .write_port, .nf_byte_sign, .load_b, .sub_byte_1, .zf_byte, .store_b, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // otir
-        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_de, .swap, .add_cc_1, .write_port, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_de, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // oti2r
+        &[_]Uop{ .load_bc, .save, .in, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_hl, .load_b, .sub_byte_1, .zf_byte, .store_b, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // inir
+        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_bc, .swap, .add_cc_1, .out, .nf_byte_sign, .load_b, .sub_byte_1, .zf_byte, .store_b, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // otir
+        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_de, .swap, .add_cc_1, .out, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_de, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // oti2r
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_de, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .dec_addr, .restore, .mask_word_inst, .store_de, .ld_flags, .load_bc, .dec_word, .mask_word_inst, .repeat_flag, .store_bc_inst, .pe, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // lddr
         &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_a, .cp_flags, .load_bc, .dec_word, .mask_word_inst, .repeat_flag, .store_bc_inst, .add_cc_1, .nz, .pe, .add_r_2, .add_cc_1, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // cpdr
-        &[_]Uop{ .load_bc, .save, .read_port, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_hl, .load_b, .sub_byte_1, .zf_byte, .store_b, .nz, .add_r_1, .repeat, .sub_r_1, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // indr
-        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_bc, .swap, .add_cc_1, .write_port, .nf_byte_sign, .load_b, .sub_byte_1, .zf_byte, .store_b, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // otdr
-        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_de, .swap, .add_cc_1, .write_port, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_de, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // otd2r
+        &[_]Uop{ .load_bc, .save, .in, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_hl, .load_b, .sub_byte_1, .zf_byte, .store_b, .nz, .add_r_1, .repeat, .sub_r_1, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // indr
+        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_bc, .swap, .add_cc_1, .out, .nf_byte_sign, .load_b, .sub_byte_1, .zf_byte, .store_b, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // otdr
+        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_de, .swap, .add_cc_1, .out, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_de, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // otd2r
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
-        &[_]Uop{ .load_de, .save, .read_port, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_hl, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // inirx
-        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_de, .swap, .add_cc_1, .write_port, .nf_byte_sign, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // otirx
+        &[_]Uop{ .load_de, .save, .in, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .inc_addr, .restore, .mask_word_inst, .store_hl, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // inirx
+        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .inc_addr, .swap, .mask_word_inst, .store_hl, .load_de, .swap, .add_cc_1, .out, .nf_byte_sign, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // otirx
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .load_hl, .store_i }, // ld i,hl
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
-        &[_]Uop{ .load_de, .save, .read_port, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_hl, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_1, .repeat, .sub_r_1, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // indrx
-        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_de, .swap, .add_cc_1, .write_port, .nf_byte_sign, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // otdrx
+        &[_]Uop{ .load_de, .save, .in, .save, .load_hl, .swap, .mask_addr_inst, .add_cc_1, .write_byte, .nf_byte_sign, .dec_addr, .restore, .mask_word_inst, .store_hl, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_1, .repeat, .sub_r_1, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // indrx
+        &[_]Uop{ .load_hl, .save, .mask_addr_inst, .read_byte, .dec_addr, .swap, .mask_word_inst, .store_hl, .load_de, .swap, .add_cc_1, .out, .nf_byte_sign, .load_bc, .dec_word, .mask_word_inst, .zf_word, .store_bc_inst, .nz, .add_r_2, .repeat, .sub_r_2, .flush, .load_pc, .sub_word_3, .sub_word_suffix, .store_pc }, // otdrx
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
         &[_]Uop{ .flush, .fetch_byte, .add_cc_1, .set_00h, .ex_pc, .sub_word_2, .interrupt }, // trap
@@ -2253,15 +2253,15 @@ fn dispatch(impl: anytype, comptime uop: Uop) anyerror!void {
             break :err impl.flush();
         },
 
-        .read_port => impl.readPortByte(),
-        .read_port_f => err: {
-            try impl.readPortByte();
-            break :err impl.readPortByteFlags();
+        .in => impl.in(),
+        .in_f => err: {
+            try impl.in();
+            break :err impl.inFlags();
         },
         .read_byte => impl.readMemoryByte(),
         .read_word => impl.readMemoryWord(),
 
-        .write_port => impl.writePortByte(),
+        .out => impl.out(),
         .write_byte => impl.writeMemoryByte(),
         .write_word => impl.writeMemoryWord(.forward),
         .write_word_rev => impl.writeMemoryWord(.reverse),

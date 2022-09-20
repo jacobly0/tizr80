@@ -5,6 +5,7 @@ const Sync = @import("sync.zig");
 const Memory = @import("memory.zig");
 const Cpu = @import("cpu.zig");
 const Keypad = @import("keypad.zig");
+const Ports = @import("ports.zig");
 
 pub const options = @import("options");
 
@@ -101,6 +102,7 @@ allocator: std.mem.Allocator,
 signal_handler: ?*const fn (*CEmuCore, Signal) void,
 sync: ?Sync = undefined,
 mem: Memory = undefined,
+ports: Ports = undefined,
 cpu: Cpu = undefined,
 keypad: Keypad = undefined,
 thread: ?std.Thread = null,
@@ -126,6 +128,7 @@ pub fn init(self: *CEmuCore, create_options: CreateOptions) !void {
         },
     }
     try self.mem.init(self.allocator);
+    try self.ports.init(self.allocator);
     try self.cpu.init(self.allocator);
     try self.keypad.init();
     if (self.sync) |*sync| {
@@ -146,6 +149,7 @@ pub fn deinit(self: *CEmuCore) void {
     if (self.thread) |thread| thread.join();
     self.keypad.deinit();
     self.cpu.deinit(self.allocator);
+    self.ports.deinit(self.allocator);
     self.mem.deinit(self.allocator);
     if (self.sync) |*sync| sync.deinit();
 }
@@ -163,8 +167,9 @@ fn getRaw(self: *CEmuCore, key: Property.Key) ?u24 {
         .register => |id| self.cpu.get(id),
         .shadow_register => |id| self.cpu.getShadow(id),
         .key => |key| self.keypad.getKey(key),
-        .flash => |address| self.mem.readByte(address),
-        .ram => |address| self.mem.readByte(Memory.ram_start + @as(u24, address)),
+        .flash => |address| self.mem.peek(address),
+        .ram => |address| self.mem.peek(Memory.ram_start + @as(u24, address)),
+        .port => |address| self.ports.peek(address),
         else => std.debug.todo("unimplemented"),
     };
 }
@@ -185,6 +190,15 @@ pub fn getSlice(self: *CEmuCore, key: Property.Key, buffer: []u8) void {
     defer if (needs_sync) if (self.sync) |*sync| sync.leave();
 
     switch (key) {
+        .flash => |address| for (buffer) |*value, offset| {
+            value.* = @intCast(u8, self.getRaw(.{ .flash = address + @intCast(u23, offset) }).?);
+        },
+        .ram => |address| for (buffer) |*value, offset| {
+            value.* = @intCast(u8, self.getRaw(.{ .ram = address + @intCast(u19, offset) }).?);
+        },
+        .port => |address| for (buffer) |*value, offset| {
+            value.* = @intCast(u8, self.getRaw(.{ .port = address + @intCast(u16, offset) }).?);
+        },
         else => if (self.getRaw(key)) |value|
             inline for (.{ 3, 2, 1, 0 }) |len| {
                 const IntType = std.meta.Int(.unsigned, len * 8);
@@ -198,7 +212,8 @@ fn setRaw(self: *CEmuCore, key: Property.Key, value: ?u24) void {
         .register => |id| self.cpu.set(id, value.?),
         .shadow_register => |id| self.cpu.setShadow(id, value.?),
         .key => |key| self.keypad.setKey(key, @intCast(u1, value.?)),
-        .ram => |address| self.mem.writeByte(Memory.ram_start + @as(u24, address), @intCast(u8, value.?)),
+        .ram => |address| self.mem.poke(Memory.ram_start + @as(u24, address), @intCast(u8, value.?)),
+        .port => |address| self.ports.poke(address, @intCast(u8, value.?)),
         else => std.debug.todo("unimplemented"),
     }
 }
@@ -221,19 +236,11 @@ pub fn setSlice(self: *CEmuCore, key: Property.Key, buffer: []const u8) void {
     defer if (needs_sync) if (self.sync) |*sync| sync.leave();
 
     switch (key) {
-        .port => |address| {
-            var offset: usize = 0;
-            while (offset < buffer.len) : (offset += 1) {
-                const current = address + offset;
-                if (current >= 0x0020 and current < 0x0026)
-                    self.mem.port0[current - 0x0020] = buffer[offset]
-                else if (current >= 0x2010 and current < 0x2050)
-                    self.mem.sha256_data[current - 0x2010] = buffer[offset]
-                else if (current >= 0x4800 and current < 0x4C00)
-                    self.mem.cursor[current - 0x4800] = buffer[offset]
-                else
-                    std.debug.todo("unimplemented");
-            }
+        .ram => |address| for (buffer) |value, offset| {
+            self.setRaw(.{ .ram = address + @intCast(u19, offset) }, value);
+        },
+        .port => |address| for (buffer) |value, offset| {
+            self.setRaw(.{ .port = address + @intCast(u16, offset) }, value);
         },
         else => {
             const value = inline for (.{ 3, 2, 1, 0 }) |len| {

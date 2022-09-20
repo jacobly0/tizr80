@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const CEmuCore = @import("../cemucore.zig");
 const Cpu = @import("../cpu.zig");
 const Decode = @import("decode.zig");
 const Interpreter = @This();
@@ -30,38 +29,16 @@ fn destroy(backend: *Cpu.Backend, allocator: std.mem.Allocator) void {
     allocator.destroy(self);
 }
 
-fn dump(self: *Interpreter, cpu: *Cpu) void {
-    std.debug.print(
-        \\
-        \\AF {X:0>4}     {X:0>4} AF'
-        \\BC {X:0>6} {X:0>6} BC'
-        \\DE {X:0>6} {X:0>6} DE'
-        \\HL {X:0>6} {X:0>6} HL'
-        \\IX {X:0>6} {X:0>6} IY
-        \\PC {X:0>6}     {X:0>2} R
-        \\   {X:0>2} {:10} CC
-        \\
-    , .{
-        cpu.getAF(),      cpu.@"af'".word.word,
-        cpu.bc.long,      cpu.@"bc'".long,
-        cpu.de.long,      cpu.@"de'".long,
-        cpu.hl.long,      cpu.@"hl'".long,
-        cpu.ix.long,      cpu.iy.long,
-        cpu.epc.long,     cpu.getR(),
-        self.fetch_cache, cpu.cycles,
-    });
-}
-
-fn execute(backend: *Cpu.Backend, core: *CEmuCore, mode: Cpu.ExecuteMode) void {
+fn execute(backend: *Cpu.Backend, cpu: *Cpu, mode: Cpu.ExecuteMode) void {
     const enable_dump = false;
     const self = @fieldParentPtr(Interpreter, "backend", backend);
-    var state = State{ .interp = self, .core = core };
+    var state = State{ .interp = self, .cpu = cpu };
     try state.reset();
     if (backend.flush) {
         backend.flush = false;
-        core.cpu.pc = core.cpu.epc;
+        state.cpu.pc = state.cpu.epc;
         state.fetchByte(.prefetch) catch unreachable;
-        if (enable_dump) self.dump(&core.cpu);
+        if (enable_dump) state.dump();
     }
     if (mode == .flush) return;
     execute: while (!self.halted) {
@@ -71,7 +48,7 @@ fn execute(backend: *Cpu.Backend, core: *CEmuCore, mode: Cpu.ExecuteMode) void {
             backend.flush = false;
             state.fetchByte(.prefetch) catch unreachable;
         }
-        if (enable_dump) self.dump(&core.cpu);
+        if (enable_dump) state.dump();
         if (mode == .step) break :execute;
         std.debug.assert(mode == .run);
     }
@@ -80,14 +57,36 @@ fn execute(backend: *Cpu.Backend, core: *CEmuCore, mode: Cpu.ExecuteMode) void {
 
 const State = struct {
     interp: *Interpreter,
-    core: *CEmuCore,
+    cpu: *Cpu,
     mode: Decode.Mode = undefined,
     accumulator: i32 = undefined,
     address: i32 = undefined,
     repeat_counter: u1 = 0,
 
+    fn dump(self: *State) void {
+        std.debug.print(
+            \\
+            \\AF {X:0>4}     {X:0>4} AF'
+            \\BC {X:0>6} {X:0>6} BC'
+            \\DE {X:0>6} {X:0>6} DE'
+            \\HL {X:0>6} {X:0>6} HL'
+            \\IX {X:0>6} {X:0>6} IY
+            \\PC {X:0>6}     {X:0>2} R
+            \\   {X:0>2} {:10} CC
+            \\
+        , .{
+            self.cpu.getAF(),        self.cpu.@"af'".word.word,
+            self.cpu.bc.long,        self.cpu.@"bc'".long,
+            self.cpu.de.long,        self.cpu.@"de'".long,
+            self.cpu.hl.long,        self.cpu.@"hl'".long,
+            self.cpu.ix.long,        self.cpu.iy.long,
+            self.cpu.epc.long,       self.cpu.getR(),
+            self.interp.fetch_cache, self.cpu.cycles,
+        });
+    }
+
     pub fn reset(self: *State) error{}!void {
-        self.mode = Decode.Mode.fromAdl(self.core.cpu.mode.adl);
+        self.mode = Decode.Mode.fromAdl(self.cpu.mode.adl);
     }
 
     pub fn set(self: *State, comptime value: comptime_int) error{}!void {
@@ -113,7 +112,7 @@ const State = struct {
         return switch (mode) {
             .s => (Cpu.Long{ .ext = .{
                 .word = @truncate(u16, address),
-                .upper = self.core.cpu.mbi.ext.upper,
+                .upper = self.cpu.mbi.ext.upper,
             } }).long,
             .l => address,
         };
@@ -129,14 +128,14 @@ const State = struct {
         self.address = self.effectiveAddress(@intCast(u24, self.address), mode);
     }
     pub fn maskAddressAdl(self: *State) error{}!void {
-        self.maskAddress(Decode.Mode.Instruction.fromAdl(self.core.cpu.mode.adl));
+        self.maskAddress(Decode.Mode.Instruction.fromAdl(self.cpu.mode.adl));
     }
     pub fn maskAddressInstruction(self: *State) error{}!void {
         self.maskAddress(self.mode.inst);
     }
 
     pub fn skip(self: *State) error{}!void {
-        self.core.cpu.pc.long +%= 6;
+        self.cpu.pc.long +%= 6;
         try self.flush();
     }
 
@@ -144,13 +143,13 @@ const State = struct {
         self.interp.backend.flush = true;
     }
     pub fn fetchByte(self: *State, comptime prefetch_mode: Decode.PrefetchMode) error{}!void {
-        const pc = self.core.cpu.pc.long;
-        const epc = self.effectiveAddress(pc, Decode.Mode.Instruction.fromAdl(self.core.cpu.mode.adl));
+        const pc = self.cpu.pc.long;
+        const epc = self.effectiveAddress(pc, Decode.Mode.Instruction.fromAdl(self.cpu.mode.adl));
         self.accumulator = self.interp.fetch_cache;
-        self.core.cpu.epc.long = epc;
+        self.cpu.epc.long = epc;
         if (prefetch_mode == .prefetch) {
-            self.interp.fetch_cache = self.core.mem.readCpuByte(epc);
-            self.core.cpu.pc.long = pc +% 1;
+            self.interp.fetch_cache = self.cpu.read(epc);
+            self.cpu.pc.long = pc +% 1;
         }
     }
     pub fn fetchWord(self: *State, comptime prefetch_mode: Decode.PrefetchMode) error{}!void {
@@ -180,19 +179,19 @@ const State = struct {
         self.mode = mode;
     }
     pub fn setAdlInstruction(self: *State) error{}!void {
-        self.core.cpu.mode.adl = switch (self.mode.inst) {
+        self.cpu.mode.adl = switch (self.mode.inst) {
             .s => .z80,
             .l => .ez80,
         };
     }
     pub fn setAdlImmediate(self: *State) error{}!void {
-        self.core.cpu.mode.adl = switch (self.mode.imm) {
+        self.cpu.mode.adl = switch (self.mode.imm) {
             .is => .z80,
             .il => .ez80,
         };
     }
     pub fn setInterruptMode(self: *State, comptime im: comptime_int) error{}!void {
-        self.core.cpu.set(.im, im);
+        self.cpu.set(.im, im);
     }
 
     pub fn halt(self: *State) error{}!void {
@@ -200,16 +199,16 @@ const State = struct {
     }
 
     pub fn addR(self: *State, comptime increment: comptime_int) error{}!void {
-        self.core.cpu.addR(increment);
+        self.cpu.addR(increment);
     }
     pub fn addRInstruction(self: *State) error{}!void {
         if (self.mode.inst == .l) try self.addR(1);
     }
     pub fn addCycles(self: *State, comptime increment: comptime_int) error{}!void {
-        self.core.cpu.cycles +%= increment;
+        self.cpu.cycles +%= increment;
     }
     pub fn addCycleCall(self: *State) error{}!void {
-        if (!self.mode.suffix and self.core.cpu.mode.adl == .z80) try self.addCycles(1);
+        if (!self.mode.suffix and self.cpu.mode.adl == .z80) try self.addCycles(1);
     }
 
     pub fn dispatch(
@@ -229,44 +228,44 @@ const State = struct {
         if (self.accumulator == 0) return error.ConditionFailed;
     }
     pub fn checkAdl(self: *State) error{ConditionFailed}!void {
-        if (self.core.cpu.mode.adl != .ez80) return error.ConditionFailed;
+        if (self.cpu.mode.adl != .ez80) return error.ConditionFailed;
     }
     pub fn checkCondition(
         self: *State,
         comptime id: Cpu.RegisterId,
         comptime value: bool,
     ) error{ConditionFailed}!void {
-        if (self.core.cpu.get(id) != @boolToInt(value)) return error.ConditionFailed;
+        if (self.cpu.get(id) != @boolToInt(value)) return error.ConditionFailed;
     }
 
     pub fn loadRegister(self: *State, comptime id: Cpu.RegisterId) error{}!void {
-        self.accumulator = self.core.cpu.get(id);
+        self.accumulator = self.cpu.get(id);
     }
     pub fn loadRegisterHigh(self: *State, comptime id: Cpu.RegisterId) error{}!void {
-        self.accumulator |= self.core.cpu.get(id) << 8;
+        self.accumulator |= self.cpu.get(id) << 8;
     }
     pub fn loadShadowRegister(self: *State, comptime id: Cpu.RegisterId) error{}!void {
-        self.accumulator = self.core.cpu.getShadow(id);
+        self.accumulator = self.cpu.getShadow(id);
     }
     fn loadStackPointer(self: *State, mode: Decode.Mode.Instruction) void {
         switch (mode) {
-            .s => self.address = self.core.cpu.get(.sps),
-            .l => self.address = self.core.cpu.get(.spl),
+            .s => self.address = self.cpu.get(.sps),
+            .l => self.address = self.cpu.get(.spl),
         }
     }
     pub fn loadStackPointerAdl(self: *State) error{}!void {
-        self.loadStackPointer(Decode.Mode.Instruction.fromAdl(self.core.cpu.mode.adl));
+        self.loadStackPointer(Decode.Mode.Instruction.fromAdl(self.cpu.mode.adl));
     }
     pub fn loadStackPointerInstruction(self: *State) error{}!void {
         self.loadStackPointer(self.mode.inst);
     }
 
     pub fn storeRegister(self: *State, comptime id: Cpu.RegisterId) error{}!void {
-        self.core.cpu.set(id, @intCast(u24, self.accumulator));
+        self.cpu.set(id, @intCast(u24, self.accumulator));
     }
     pub fn storeRegisterHigh(self: *State, comptime id: Cpu.RegisterId) error{}!void {
         const word = @intCast(u16, self.accumulator);
-        self.core.cpu.set(id, word >> 8);
+        self.cpu.set(id, word >> 8);
         self.accumulator = @truncate(u8, word);
     }
     pub fn storeRegisterInstruction(
@@ -280,16 +279,16 @@ const State = struct {
         };
     }
     pub fn storeShadowRegister(self: *State, comptime id: Cpu.RegisterId) error{}!void {
-        self.core.cpu.setShadow(id, @intCast(u24, self.accumulator));
+        self.cpu.setShadow(id, @intCast(u24, self.accumulator));
     }
     fn storeStackPointer(self: *State, mode: Decode.Mode.Instruction) void {
         switch (mode) {
-            .s => self.core.cpu.set(.sps, @truncate(u16, @intCast(u24, self.address))),
-            .l => self.core.cpu.set(.spl, @intCast(u24, self.address)),
+            .s => self.cpu.set(.sps, @truncate(u16, @intCast(u24, self.address))),
+            .l => self.cpu.set(.spl, @intCast(u24, self.address)),
         }
     }
     pub fn storeStackPointerAdl(self: *State) error{}!void {
-        self.storeStackPointer(Decode.Mode.Instruction.fromAdl(self.core.cpu.mode.adl));
+        self.storeStackPointer(Decode.Mode.Instruction.fromAdl(self.cpu.mode.adl));
     }
     pub fn storeStackPointerInstruction(self: *State) error{}!void {
         self.storeStackPointer(self.mode.inst);
@@ -320,15 +319,15 @@ const State = struct {
         self.accumulator = temp;
     }
 
-    pub fn readPortByte(self: *State) error{}!void {
-        self.accumulator = self.core.mem.readCpuPortByte(@truncate(u16, @intCast(u24, self.address)));
+    pub fn in(self: *State) error{}!void {
+        self.accumulator = self.cpu.in(@truncate(u16, @intCast(u24, self.address)));
     }
-    pub fn readPortByteFlags(self: *State) error{}!void {
-        self.core.cpu.nf = false;
-        self.core.cpu.hc = false;
+    pub fn inFlags(self: *State) error{}!void {
+        self.cpu.nf = false;
+        self.cpu.hc = false;
     }
     pub fn readMemoryByte(self: *State) error{}!void {
-        self.accumulator = self.core.mem.readCpuByte(@intCast(u24, self.address));
+        self.accumulator = self.cpu.read(@intCast(u24, self.address));
     }
     pub fn readMemoryWord(self: *State) error{}!void {
         try self.readMemoryByte();
@@ -349,14 +348,11 @@ const State = struct {
         self.accumulator = word;
     }
 
-    pub fn writePortByte(self: *State) error{}!void {
-        self.core.mem.writeCpuPortByte(
-            @truncate(u16, @intCast(u24, self.address)),
-            @intCast(u8, self.accumulator),
-        );
+    pub fn out(self: *State) error{}!void {
+        self.cpu.out(@truncate(u16, @intCast(u24, self.address)), @intCast(u8, self.accumulator));
     }
     pub fn writeMemoryByte(self: *State) error{}!void {
-        self.core.mem.writeCpuByte(@intCast(u24, self.address), @intCast(u8, self.accumulator));
+        self.cpu.write(@intCast(u24, self.address), @intCast(u8, self.accumulator));
     }
     pub fn writeMemoryWord(self: *State, comptime direction: Decode.Direction) error{}!void {
         const word = @intCast(u24, self.accumulator);
@@ -401,16 +397,16 @@ const State = struct {
         if (mixed) {
             const pc = @intCast(u24, self.accumulator);
 
-            if (self.core.cpu.mode.adl == .ez80) {
-                self.address = self.core.cpu.spl.long;
+            if (self.cpu.mode.adl == .ez80) {
+                self.address = self.cpu.spl.long;
                 try self.addAddress(-1);
                 self.accumulator = @truncate(u8, pc >> 16);
                 try self.writeMemoryByte();
 
                 try self.addAddress(-1);
-                self.accumulator = util.toBacking(self.core.cpu.mode);
+                self.accumulator = util.toBacking(self.cpu.mode);
                 try self.writeMemoryByte();
-                self.core.cpu.spl.long = @intCast(u24, self.address);
+                self.cpu.spl.long = @intCast(u24, self.address);
             }
 
             self.loadStackPointer(stack);
@@ -425,12 +421,12 @@ const State = struct {
             try self.writeMemoryByte();
             self.storeStackPointer(stack);
 
-            if (self.core.cpu.mode.adl == .z80) {
-                self.address = self.core.cpu.spl.long;
+            if (self.cpu.mode.adl == .z80) {
+                self.address = self.cpu.spl.long;
                 try self.addAddress(-1);
-                self.accumulator = util.toBacking(self.core.cpu.mode);
+                self.accumulator = util.toBacking(self.cpu.mode);
                 try self.writeMemoryByte();
-                self.core.cpu.spl.long = @intCast(u24, self.address);
+                self.cpu.spl.long = @intCast(u24, self.address);
             }
         } else {
             try self.loadStackPointerInstruction();
@@ -442,8 +438,8 @@ const State = struct {
     }
     pub fn interrupt(self: *State) error{}!void {
         self.restart(
-            Decode.Mode.Instruction.fromAdl(self.core.cpu.mode.adl),
-            self.core.cpu.mode.madl == .ez80,
+            Decode.Mode.Instruction.fromAdl(self.cpu.mode.adl),
+            self.cpu.mode.madl == .ez80,
         );
     }
     pub fn rst(self: *State) error{}!void {
@@ -454,22 +450,22 @@ const State = struct {
             const pc = @intCast(u24, self.accumulator);
             if (self.mode.imm == .il) try self.addR(1);
 
-            if (self.core.cpu.mode.adl == .ez80) {
-                self.address = self.core.cpu.spl.long;
+            if (self.cpu.mode.adl == .ez80) {
+                self.address = self.cpu.spl.long;
                 try self.addAddress(-1);
                 self.accumulator = @truncate(u8, pc >> 16);
                 try self.writeMemoryByte();
 
                 if (self.mode.imm == .is) {
                     try self.addAddress(-1);
-                    self.accumulator = util.toBacking(self.core.cpu.mode);
+                    self.accumulator = util.toBacking(self.cpu.mode);
                     try self.writeMemoryByte();
                 }
-                self.core.cpu.spl.long = @intCast(u24, self.address);
+                self.cpu.spl.long = @intCast(u24, self.address);
             }
 
             const stack: Decode.Mode.Instruction = if (self.mode.imm == .il or
-                self.mode.inst == .l and self.core.cpu.mode.adl == .z80) .l else .s;
+                self.mode.inst == .l and self.cpu.mode.adl == .z80) .l else .s;
 
             self.loadStackPointer(stack);
             try self.addAddress(-1);
@@ -483,12 +479,12 @@ const State = struct {
             try self.writeMemoryByte();
             self.storeStackPointer(stack);
 
-            if (self.mode.imm == .il or self.core.cpu.mode.adl == .z80) {
-                self.address = self.core.cpu.spl.long;
+            if (self.mode.imm == .il or self.cpu.mode.adl == .z80) {
+                self.address = self.cpu.spl.long;
                 try self.addAddress(-1);
-                self.accumulator = util.toBacking(self.core.cpu.mode);
+                self.accumulator = util.toBacking(self.cpu.mode);
                 try self.writeMemoryByte();
-                self.core.cpu.spl.long = @intCast(u24, self.address);
+                self.cpu.spl.long = @intCast(u24, self.address);
             }
         } else {
             try self.loadStackPointerInstruction();
@@ -500,11 +496,11 @@ const State = struct {
     }
     pub fn ret(self: *State) error{}!void {
         if (self.mode.suffix) {
-            self.address = self.core.cpu.get(.spl);
+            self.address = self.cpu.get(.spl);
             try self.readMemoryByte();
             const adl = @intToEnum(Cpu.Adl, @truncate(u1, @intCast(u8, self.accumulator)));
             try self.addAddress(1);
-            self.core.cpu.set(.spl, @intCast(u24, self.address));
+            self.cpu.set(.spl, @intCast(u24, self.address));
 
             try self.loadStackPointerAdl();
             try self.maskAddressAdl();
@@ -520,15 +516,15 @@ const State = struct {
             try self.storeStackPointerAdl();
 
             if (adl == .ez80) {
-                self.address = self.core.cpu.get(.spl);
+                self.address = self.cpu.get(.spl);
                 try self.readMemoryByte();
-                if (self.mode.inst == .l or self.core.cpu.mode.adl == .ez80)
+                if (self.mode.inst == .l or self.cpu.mode.adl == .ez80)
                     pc |= self.accumulator << 16;
                 try self.addAddress(1);
-                self.core.cpu.set(.spl, @intCast(u24, self.address));
+                self.cpu.set(.spl, @intCast(u24, self.address));
             }
 
-            self.core.cpu.mode.adl = adl;
+            self.cpu.mode.adl = adl;
             self.accumulator = pc;
         } else {
             try self.loadStackPointerInstruction();
@@ -539,7 +535,7 @@ const State = struct {
         }
     }
     pub fn copyIef(self: *State) error{}!void {
-        self.core.cpu.ief1 = self.core.cpu.ief2;
+        self.cpu.ief1 = self.cpu.ief2;
     }
 
     pub fn offsetByte(self: *State, comptime offset: comptime_int) error{}!void {
@@ -547,102 +543,102 @@ const State = struct {
     }
 
     pub fn zeroFlags(self: *State) error{}!void {
-        self.core.cpu.cf = false;
-        self.core.cpu.nf = false;
-        self.core.cpu.pv = false;
-        self.core.cpu.hc = false;
-        self.core.cpu.zf = false;
-        self.core.cpu.sf = false;
+        self.cpu.cf = false;
+        self.cpu.nf = false;
+        self.cpu.pv = false;
+        self.cpu.hc = false;
+        self.cpu.zf = false;
+        self.cpu.sf = false;
     }
     pub fn loadRegisterFlags(self: *State) error{}!void {
         const byte = @intCast(u8, self.accumulator);
-        self.core.cpu.nf = false;
-        self.core.cpu.pv = self.core.cpu.ief2;
-        self.core.cpu.hc = false;
-        self.core.cpu.zf = byte == 0;
-        self.core.cpu.sf = @bitCast(i8, byte) < 0;
+        self.cpu.nf = false;
+        self.cpu.pv = self.cpu.ief2;
+        self.cpu.hc = false;
+        self.cpu.zf = byte == 0;
+        self.cpu.sf = @bitCast(i8, byte) < 0;
     }
 
     pub fn rlcByte(self: *State) error{}!void {
         const byte = @intCast(u8, self.accumulator);
-        self.core.cpu.set(.cf, @truncate(u1, byte >> 7));
-        self.core.cpu.nf = false;
-        self.core.cpu.hc = false;
+        self.cpu.set(.cf, @truncate(u1, byte >> 7));
+        self.cpu.nf = false;
+        self.cpu.hc = false;
         self.accumulator = std.math.rotl(u8, byte, 1);
     }
     pub fn rrcByte(self: *State) error{}!void {
         const byte = @intCast(u8, self.accumulator);
-        self.core.cpu.set(.cf, @truncate(u1, byte >> 0));
-        self.core.cpu.nf = false;
-        self.core.cpu.hc = false;
+        self.cpu.set(.cf, @truncate(u1, byte >> 0));
+        self.cpu.nf = false;
+        self.cpu.hc = false;
         self.accumulator = std.math.rotr(u8, byte, 1);
     }
     pub fn rlByte(self: *State) error{}!void {
-        const carry = @boolToInt(self.core.cpu.cf);
+        const carry = @boolToInt(self.cpu.cf);
         const byte = @intCast(u8, self.accumulator);
-        self.core.cpu.set(.cf, @truncate(u1, byte >> 7));
-        self.core.cpu.nf = false;
-        self.core.cpu.hc = false;
+        self.cpu.set(.cf, @truncate(u1, byte >> 7));
+        self.cpu.nf = false;
+        self.cpu.hc = false;
         self.accumulator = byte << 1 | @as(u8, carry) << 0;
     }
     pub fn rrByte(self: *State) error{}!void {
-        const carry = @boolToInt(self.core.cpu.cf);
+        const carry = @boolToInt(self.cpu.cf);
         const byte = @intCast(u8, self.accumulator);
-        self.core.cpu.set(.cf, @truncate(u1, byte >> 0));
-        self.core.cpu.nf = false;
-        self.core.cpu.hc = false;
+        self.cpu.set(.cf, @truncate(u1, byte >> 0));
+        self.cpu.nf = false;
+        self.cpu.hc = false;
         self.accumulator = byte >> 1 | @as(u8, carry) << 7;
     }
     pub fn slaByte(self: *State) error{}!void {
         const byte = @intCast(u8, self.accumulator);
-        self.core.cpu.set(.cf, @truncate(u1, byte >> 7));
-        self.core.cpu.nf = false;
-        self.core.cpu.hc = false;
+        self.cpu.set(.cf, @truncate(u1, byte >> 7));
+        self.cpu.nf = false;
+        self.cpu.hc = false;
         self.accumulator = byte << 1;
     }
     pub fn sraByte(self: *State) error{}!void {
         const byte = @intCast(u8, self.accumulator);
-        self.core.cpu.set(.cf, @truncate(u1, byte >> 0));
-        self.core.cpu.nf = false;
-        self.core.cpu.hc = false;
+        self.cpu.set(.cf, @truncate(u1, byte >> 0));
+        self.cpu.nf = false;
+        self.cpu.hc = false;
         self.accumulator = @bitCast(u8, @bitCast(i8, byte) >> 1);
     }
     pub fn srlByte(self: *State) error{}!void {
         const byte = @intCast(u8, self.accumulator);
-        self.core.cpu.set(.cf, @truncate(u1, byte >> 0));
-        self.core.cpu.nf = false;
-        self.core.cpu.hc = false;
+        self.cpu.set(.cf, @truncate(u1, byte >> 0));
+        self.cpu.nf = false;
+        self.cpu.hc = false;
         self.accumulator = byte >> 1;
     }
     pub fn daaByte(self: *State) error{}!void {
         const byte = @intCast(u8, self.accumulator);
         const low = @truncate(u4, byte);
 
-        const low_offset: u4 = if (self.core.cpu.hc or low > 0x9) 0x10 - 0xA else 0;
+        const low_offset: u4 = if (self.cpu.hc or low > 0x9) 0x10 - 0xA else 0;
 
-        if (@as(u9, byte) + low_offset >> 4 > 0x9) self.core.cpu.cf = true;
-        const high_offset: u8 = if (self.core.cpu.cf) 0x10 - 0xA else 0;
+        if (@as(u9, byte) + low_offset >> 4 > 0x9) self.cpu.cf = true;
+        const high_offset: u8 = if (self.cpu.cf) 0x10 - 0xA else 0;
 
         const offset = high_offset << 4 | low_offset;
         var result: u8 = undefined;
         var low_result: u4 = undefined;
-        if (self.core.cpu.nf) {
+        if (self.cpu.nf) {
             result = byte -% offset;
-            self.core.cpu.hc = @subWithOverflow(u4, low, low_offset, &low_result);
+            self.cpu.hc = @subWithOverflow(u4, low, low_offset, &low_result);
         } else {
             result = byte +% offset;
-            self.core.cpu.hc = @addWithOverflow(u4, low, low_offset, &low_result);
+            self.cpu.hc = @addWithOverflow(u4, low, low_offset, &low_result);
         }
         self.accumulator = result;
     }
     pub fn cplByte(self: *State) error{}!void {
-        self.core.cpu.nf = true;
-        self.core.cpu.hc = true;
+        self.cpu.nf = true;
+        self.cpu.hc = true;
         self.accumulator = ~@intCast(u8, self.accumulator);
     }
     pub fn bitByte(self: *State, comptime bit: u3) error{}!void {
-        self.core.cpu.nf = false;
-        self.core.cpu.hc = true;
+        self.cpu.nf = false;
+        self.cpu.hc = true;
         self.accumulator &= 1 << bit;
     }
     pub fn resByte(self: *State, comptime bit: u3) error{}!void {
@@ -652,48 +648,48 @@ const State = struct {
         self.accumulator |= 1 << bit;
     }
     pub fn setSubtractByteSign(self: *State) error{}!void {
-        self.core.cpu.nf = @bitCast(i8, @intCast(u8, self.accumulator)) < 0;
+        self.cpu.nf = @bitCast(i8, @intCast(u8, self.accumulator)) < 0;
     }
     pub fn setParityByte(self: *State) error{}!void {
-        self.core.cpu.pv = @popCount(@intCast(u8, self.accumulator)) & 1 == 0;
+        self.cpu.pv = @popCount(@intCast(u8, self.accumulator)) & 1 == 0;
     }
     pub fn setZeroByte(self: *State) error{}!void {
-        self.core.cpu.zf = @intCast(u8, self.accumulator) == 0;
+        self.cpu.zf = @intCast(u8, self.accumulator) == 0;
     }
     pub fn setZeroWord(self: *State) error{}!void {
-        self.core.cpu.zf = @intCast(u24, self.accumulator) == 0;
+        self.cpu.zf = @intCast(u24, self.accumulator) == 0;
     }
     pub fn setSignByte(self: *State) error{}!void {
-        self.core.cpu.sf = @bitCast(i8, @intCast(u8, self.accumulator)) < 0;
+        self.cpu.sf = @bitCast(i8, @intCast(u8, self.accumulator)) < 0;
     }
     fn setCarry(self: *State, value: bool) void {
-        self.core.cpu.cf = value;
-        self.core.cpu.nf = false;
-        self.core.cpu.hc = !value;
+        self.cpu.cf = value;
+        self.cpu.nf = false;
+        self.cpu.hc = !value;
     }
     pub fn scf(self: *State) error{}!void {
         self.setCarry(true);
     }
     pub fn ccf(self: *State) error{}!void {
-        self.setCarry(!self.core.cpu.cf);
+        self.setCarry(!self.cpu.cf);
     }
     pub fn addByte(self: *State, comptime rhs: comptime_int) error{}!void {
         const unsigned_lhs = @intCast(u8, self.accumulator);
         const signed_rhs: i8 = rhs;
         const unsigned_rhs = @bitCast(u8, signed_rhs);
-        self.core.cpu.nf = signed_rhs < 0;
+        self.cpu.nf = signed_rhs < 0;
 
         const signed_lhs = @bitCast(i8, unsigned_lhs);
         var signed_result: i8 = undefined;
-        self.core.cpu.pv = @addWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
+        self.cpu.pv = @addWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
 
         const low_lhs = @truncate(u4, unsigned_lhs);
         const low_rhs = @truncate(u4, unsigned_rhs);
         var low_result: u4 = undefined;
-        self.core.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) != self.core.cpu.nf;
+        self.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) != self.cpu.nf;
 
-        self.core.cpu.zf = signed_result == 0;
-        self.core.cpu.sf = signed_result < 0;
+        self.cpu.zf = signed_result == 0;
+        self.cpu.sf = signed_result < 0;
         self.accumulator = @bitCast(u8, signed_result);
     }
     pub fn addByteHalfZeroSign(self: *State, comptime rhs: comptime_int) error{}!void {
@@ -701,16 +697,16 @@ const State = struct {
         const unsigned_rhs = @bitCast(u8, @as(i8, rhs));
         const unsigned_result = unsigned_lhs +% unsigned_rhs;
 
-        self.core.cpu.cf = false;
-        self.core.cpu.pv = false;
+        self.cpu.cf = false;
+        self.cpu.pv = false;
 
         const low_lhs = @truncate(u4, unsigned_lhs);
         const low_rhs = @truncate(u4, unsigned_rhs);
         var low_result: u4 = undefined;
-        self.core.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) != (rhs < 0);
+        self.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) != (rhs < 0);
 
-        self.core.cpu.zf = unsigned_result == 0;
-        self.core.cpu.sf = @bitCast(i8, unsigned_result) < 0;
+        self.cpu.zf = unsigned_result == 0;
+        self.cpu.sf = @bitCast(i8, unsigned_result) < 0;
         self.accumulator = unsigned_result;
     }
     fn addWordByte(word: *i32, byte: i8) void {
@@ -733,123 +729,123 @@ const State = struct {
         const unsigned_lhs = @intCast(u8, self.accumulator);
         const unsigned_rhs = @intCast(u8, self.address);
         var unsigned_result: u8 = undefined;
-        self.core.cpu.cf = @addWithOverflow(u8, unsigned_lhs, unsigned_rhs, &unsigned_result);
+        self.cpu.cf = @addWithOverflow(u8, unsigned_lhs, unsigned_rhs, &unsigned_result);
 
-        self.core.cpu.nf = false;
+        self.cpu.nf = false;
 
         const signed_lhs = @bitCast(i8, unsigned_lhs);
         const signed_rhs = @bitCast(i8, unsigned_rhs);
         var signed_result: i8 = undefined;
-        self.core.cpu.pv = @addWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
+        self.cpu.pv = @addWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
 
         const low_lhs = @truncate(u4, unsigned_lhs);
         const low_rhs = @truncate(u4, unsigned_rhs);
         var low_result: u4 = undefined;
-        self.core.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result);
+        self.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result);
 
-        self.core.cpu.zf = unsigned_result == 0;
-        self.core.cpu.sf = signed_result < 0;
+        self.cpu.zf = unsigned_result == 0;
+        self.cpu.sf = signed_result < 0;
         self.accumulator = unsigned_result;
     }
     pub fn adcBytes(self: *State) error{}!void {
-        const carry = @boolToInt(self.core.cpu.cf);
+        const carry = @boolToInt(self.cpu.cf);
 
         const unsigned_lhs = @intCast(u8, self.accumulator);
         const unsigned_rhs = @intCast(u8, self.address);
         var unsigned_result: u8 = undefined;
         const cf = @addWithOverflow(u8, unsigned_lhs, unsigned_rhs, &unsigned_result);
-        self.core.cpu.cf = @addWithOverflow(u8, unsigned_result, carry, &unsigned_result) or cf;
+        self.cpu.cf = @addWithOverflow(u8, unsigned_result, carry, &unsigned_result) or cf;
 
-        self.core.cpu.nf = false;
+        self.cpu.nf = false;
 
         const signed_lhs = @bitCast(i8, unsigned_lhs);
         const signed_rhs = @bitCast(i8, unsigned_rhs);
         const signed_result = @bitCast(i8, unsigned_result);
-        self.core.cpu.pv = @as(i9, signed_lhs) + signed_rhs + carry != signed_result;
+        self.cpu.pv = @as(i9, signed_lhs) + signed_rhs + carry != signed_result;
 
         const low_lhs = @truncate(u4, unsigned_lhs);
         const low_rhs = @truncate(u4, unsigned_rhs);
         var low_result: u4 = undefined;
-        self.core.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) or
+        self.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) or
             @addWithOverflow(u4, low_result, carry, &low_result);
 
-        self.core.cpu.zf = unsigned_result == 0;
-        self.core.cpu.sf = signed_result < 0;
+        self.cpu.zf = unsigned_result == 0;
+        self.cpu.sf = signed_result < 0;
         self.accumulator = unsigned_result;
     }
     pub fn subBytes(self: *State) error{}!void {
         const unsigned_lhs = @intCast(u8, self.accumulator);
         const unsigned_rhs = @intCast(u8, self.address);
         var unsigned_result: u8 = undefined;
-        self.core.cpu.cf = @subWithOverflow(u8, unsigned_lhs, unsigned_rhs, &unsigned_result);
+        self.cpu.cf = @subWithOverflow(u8, unsigned_lhs, unsigned_rhs, &unsigned_result);
 
-        self.core.cpu.nf = true;
+        self.cpu.nf = true;
 
         const signed_lhs = @bitCast(i8, unsigned_lhs);
         const signed_rhs = @bitCast(i8, unsigned_rhs);
         var signed_result: i8 = undefined;
-        self.core.cpu.pv = @subWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
+        self.cpu.pv = @subWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
 
         const low_lhs = @truncate(u4, unsigned_lhs);
         const low_rhs = @truncate(u4, unsigned_rhs);
         var low_result: u4 = undefined;
-        self.core.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result);
+        self.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result);
 
-        self.core.cpu.zf = unsigned_result == 0;
-        self.core.cpu.sf = signed_result < 0;
+        self.cpu.zf = unsigned_result == 0;
+        self.cpu.sf = signed_result < 0;
         self.accumulator = unsigned_result;
     }
     pub fn sbcBytes(self: *State) error{}!void {
-        const carry = @boolToInt(self.core.cpu.cf);
+        const carry = @boolToInt(self.cpu.cf);
 
         const unsigned_lhs = @intCast(u8, self.accumulator);
         const unsigned_rhs = @intCast(u8, self.address);
         var unsigned_result: u8 = undefined;
         const cf = @subWithOverflow(u8, unsigned_lhs, unsigned_rhs, &unsigned_result);
-        self.core.cpu.cf = @subWithOverflow(u8, unsigned_result, carry, &unsigned_result) or cf;
+        self.cpu.cf = @subWithOverflow(u8, unsigned_result, carry, &unsigned_result) or cf;
 
-        self.core.cpu.nf = true;
+        self.cpu.nf = true;
 
         const signed_lhs = @bitCast(i8, unsigned_lhs);
         const signed_rhs = @bitCast(i8, unsigned_rhs);
         const signed_result = @bitCast(i8, unsigned_result);
-        self.core.cpu.pv = @as(i9, signed_lhs) - signed_rhs - carry != signed_result;
+        self.cpu.pv = @as(i9, signed_lhs) - signed_rhs - carry != signed_result;
 
         const low_lhs = @truncate(u4, unsigned_lhs);
         const low_rhs = @truncate(u4, unsigned_rhs);
         var low_result: u4 = undefined;
-        self.core.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result) or
+        self.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result) or
             @subWithOverflow(u4, low_result, carry, &low_result);
 
-        self.core.cpu.zf = unsigned_result == 0;
-        self.core.cpu.sf = signed_result < 0;
+        self.cpu.zf = unsigned_result == 0;
+        self.cpu.sf = signed_result < 0;
         self.accumulator = unsigned_result;
     }
     pub fn andBytes(self: *State) error{}!void {
         const lhs = @intCast(u8, self.accumulator);
         const rhs = @intCast(u8, self.address);
 
-        self.core.cpu.cf = false;
-        self.core.cpu.nf = false;
-        self.core.cpu.hc = true;
+        self.cpu.cf = false;
+        self.cpu.nf = false;
+        self.cpu.hc = true;
         self.accumulator = lhs & rhs;
     }
     pub fn xorBytes(self: *State) error{}!void {
         const lhs = @intCast(u8, self.accumulator);
         const rhs = @intCast(u8, self.address);
 
-        self.core.cpu.cf = false;
-        self.core.cpu.nf = false;
-        self.core.cpu.hc = false;
+        self.cpu.cf = false;
+        self.cpu.nf = false;
+        self.cpu.hc = false;
         self.accumulator = lhs ^ rhs;
     }
     pub fn orBytes(self: *State) error{}!void {
         const lhs = @intCast(u8, self.accumulator);
         const rhs = @intCast(u8, self.address);
 
-        self.core.cpu.cf = false;
-        self.core.cpu.nf = false;
-        self.core.cpu.hc = false;
+        self.cpu.cf = false;
+        self.cpu.nf = false;
+        self.cpu.hc = false;
         self.accumulator = lhs | rhs;
     }
     pub fn mltBytes(self: *State) error{}!void {
@@ -861,11 +857,11 @@ const State = struct {
     const Digits = packed struct(u16) { mem_low: u4, mem_high: u4, a_low: u4, a_high: u4 };
     fn rdBytesFlags(self: *State) void {
         const byte = @truncate(u8, @intCast(u16, self.accumulator) >> 8);
-        self.core.cpu.nf = false;
-        self.core.cpu.pv = @popCount(byte) & 1 == 0;
-        self.core.cpu.hc = false;
-        self.core.cpu.zf = byte == 0;
-        self.core.cpu.sf = @bitCast(i8, byte) < 0;
+        self.cpu.nf = false;
+        self.cpu.pv = @popCount(byte) & 1 == 0;
+        self.cpu.hc = false;
+        self.cpu.zf = byte == 0;
+        self.cpu.sf = @bitCast(i8, byte) < 0;
     }
     pub fn rrdBytes(self: *State) error{}!void {
         const digits = util.fromBacking(Digits, @intCast(u16, self.accumulator));
@@ -894,14 +890,14 @@ const State = struct {
         const unsigned_lhs = @truncate(UnsignedInt, @intCast(u24, self.accumulator));
         const unsigned_rhs = @truncate(UnsignedInt, @intCast(u24, self.address));
         var unsigned_result: UnsignedInt = undefined;
-        self.core.cpu.cf = @addWithOverflow(UnsignedInt, unsigned_lhs, unsigned_rhs, &unsigned_result);
+        self.cpu.cf = @addWithOverflow(UnsignedInt, unsigned_lhs, unsigned_rhs, &unsigned_result);
 
-        self.core.cpu.nf = false;
+        self.cpu.nf = false;
 
         const low_lhs = @truncate(u12, unsigned_lhs);
         const low_rhs = @truncate(u12, unsigned_rhs);
         var low_result: u12 = undefined;
-        self.core.cpu.hc = @addWithOverflow(u12, low_lhs, low_rhs, &low_result);
+        self.cpu.hc = @addWithOverflow(u12, low_lhs, low_rhs, &low_result);
 
         self.accumulator = unsigned_result;
     }
@@ -915,30 +911,30 @@ const State = struct {
         const UnsignedInt = std.meta.Int(.unsigned, width);
         const SignedInt = std.meta.Int(.signed, width);
 
-        const carry = @boolToInt(self.core.cpu.cf);
+        const carry = @boolToInt(self.cpu.cf);
 
         const unsigned_lhs = @truncate(UnsignedInt, @intCast(u24, self.accumulator));
         const unsigned_rhs = @truncate(UnsignedInt, @intCast(u24, self.address));
         var unsigned_result: UnsignedInt = undefined;
         const cf = @addWithOverflow(UnsignedInt, unsigned_lhs, unsigned_rhs, &unsigned_result);
-        self.core.cpu.cf = @addWithOverflow(UnsignedInt, unsigned_result, carry, &unsigned_result) or cf;
+        self.cpu.cf = @addWithOverflow(UnsignedInt, unsigned_result, carry, &unsigned_result) or cf;
 
-        self.core.cpu.nf = false;
+        self.cpu.nf = false;
 
         const signed_lhs = @bitCast(SignedInt, unsigned_lhs);
         const signed_rhs = @bitCast(SignedInt, unsigned_rhs);
         const signed_result = @bitCast(SignedInt, unsigned_result);
-        self.core.cpu.pv = @as(std.meta.Int(.signed, width + 1), signed_lhs) + signed_rhs + carry !=
+        self.cpu.pv = @as(std.meta.Int(.signed, width + 1), signed_lhs) + signed_rhs + carry !=
             signed_result;
 
         const low_lhs = @truncate(u12, unsigned_lhs);
         const low_rhs = @truncate(u12, unsigned_rhs);
         var low_result: u12 = undefined;
-        self.core.cpu.hc = @addWithOverflow(u12, low_lhs, low_rhs, &low_result) or
+        self.cpu.hc = @addWithOverflow(u12, low_lhs, low_rhs, &low_result) or
             @addWithOverflow(u12, low_result, carry, &low_result);
 
-        self.core.cpu.zf = unsigned_result == 0;
-        self.core.cpu.sf = signed_result < 0;
+        self.cpu.zf = unsigned_result == 0;
+        self.cpu.sf = signed_result < 0;
 
         self.accumulator = unsigned_result;
     }
@@ -952,30 +948,30 @@ const State = struct {
         const UnsignedInt = std.meta.Int(.unsigned, width);
         const SignedInt = std.meta.Int(.signed, width);
 
-        const carry = @boolToInt(self.core.cpu.cf);
+        const carry = @boolToInt(self.cpu.cf);
 
         const unsigned_lhs = @truncate(UnsignedInt, @intCast(u24, self.accumulator));
         const unsigned_rhs = @truncate(UnsignedInt, @intCast(u24, self.address));
         var unsigned_result: UnsignedInt = undefined;
         const cf = @subWithOverflow(UnsignedInt, unsigned_lhs, unsigned_rhs, &unsigned_result);
-        self.core.cpu.cf = @subWithOverflow(UnsignedInt, unsigned_result, carry, &unsigned_result) or cf;
+        self.cpu.cf = @subWithOverflow(UnsignedInt, unsigned_result, carry, &unsigned_result) or cf;
 
-        self.core.cpu.nf = true;
+        self.cpu.nf = true;
 
         const signed_lhs = @bitCast(SignedInt, unsigned_lhs);
         const signed_rhs = @bitCast(SignedInt, unsigned_rhs);
         const signed_result = @bitCast(SignedInt, unsigned_result);
-        self.core.cpu.pv = @as(std.meta.Int(.signed, width + 1), signed_lhs) -% signed_rhs -% carry !=
+        self.cpu.pv = @as(std.meta.Int(.signed, width + 1), signed_lhs) -% signed_rhs -% carry !=
             signed_result;
 
         const low_lhs = @truncate(u12, unsigned_lhs);
         const low_rhs = @truncate(u12, unsigned_rhs);
         var low_result: u12 = undefined;
-        self.core.cpu.hc = @subWithOverflow(u12, low_lhs, low_rhs, &low_result) or
+        self.cpu.hc = @subWithOverflow(u12, low_lhs, low_rhs, &low_result) or
             @subWithOverflow(u12, low_result, carry, &low_result);
 
-        self.core.cpu.zf = unsigned_result == 0;
-        self.core.cpu.sf = signed_result < 0;
+        self.cpu.zf = unsigned_result == 0;
+        self.cpu.sf = signed_result < 0;
 
         self.accumulator = unsigned_result;
     }
@@ -987,26 +983,26 @@ const State = struct {
     }
 
     pub fn ldFlags(self: *State) error{}!void {
-        self.core.cpu.nf = false;
-        self.core.cpu.hc = false;
+        self.cpu.nf = false;
+        self.cpu.hc = false;
     }
     pub fn cpFlags(self: *State) error{}!void {
         const lhs = @intCast(u8, self.accumulator);
         const rhs = @intCast(u8, self.address);
         const result = lhs -% rhs;
 
-        self.core.cpu.nf = true;
+        self.cpu.nf = true;
 
         const low_lhs = @truncate(u4, lhs);
         const low_rhs = @truncate(u4, rhs);
         var low_result: u4 = undefined;
-        self.core.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result);
+        self.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result);
 
-        self.core.cpu.zf = result == 0;
-        self.core.cpu.sf = @bitCast(i8, result) < 0;
+        self.cpu.zf = result == 0;
+        self.cpu.sf = @bitCast(i8, result) < 0;
     }
     pub fn repeatFlag(self: *State) error{}!void {
-        self.core.cpu.pv = self.accumulator != 0;
+        self.cpu.pv = self.accumulator != 0;
     }
     pub fn repeat(self: *State) error{RepeatInstruction}!void {
         self.repeat_counter = 1;
@@ -1032,7 +1028,7 @@ fn consumeSlice(buffer: *[:0]const u8, len: usize) []const u8 {
 test "ezex" {
     if (false) return error.SkipZigTest;
 
-    const core = try CEmuCore.create(.{
+    const core = try @import("../cemucore.zig").create(.{
         .allocator = std.testing.allocator,
         .threading = .SingleThreaded,
     });
@@ -1064,20 +1060,23 @@ test "ezex" {
                     input[shift_index] ^= shift_bit;
 
                     if (input[17] != 0o166) {
-                        std.mem.copy(u8, core.mem.cursor[0..8], input[0..8]);
-                        std.mem.copy(u8, core.mem.port0[0..6], input[8..14]);
-                        std.mem.copy(u8, core.mem.sha256_data[14..16], input[14..16]);
+                        core.setSlice(.{ .port = 0x4800 }, input[0..8]);
+                        core.setSlice(.{ .port = 0x0020 }, input[8..14]);
+                        core.setSlice(.{ .port = 0x201E }, input[14..16]);
                         core.cpu.setShadow(.adl, @truncate(u1, input[16] >> 0));
                         core.cpu.set(.adl, @truncate(u1, input[16] >> 1));
-                        core.mem.cursor[0x100] = if (input[16] >> 2 & 1 != 0) switch (@truncate(u2, input[16] >> 3)) {
-                            0 => 0o100,
-                            1 => 0o111,
-                            2 => 0o122,
-                            3 => 0o133,
-                        } else 0o000;
+                        core.set(
+                            .{ .port = 0x4900 },
+                            if (input[16] >> 2 & 1 != 0) switch (@truncate(u2, input[16] >> 3)) {
+                                0 => 0o100,
+                                1 => 0o111,
+                                2 => 0o122,
+                                3 => 0o133,
+                            } else 0o000,
+                        );
                         core.cpu.set(.ief, @truncate(u1, input[16] >> 5));
-                        std.mem.copy(u8, core.mem.cursor[0x101..0x106], input[17..22]);
-                        std.mem.set(u8, core.mem.cursor[0x106..0x117], 0);
+                        core.setSlice(.{ .port = 0x4901 }, input[17..22]);
+                        core.setSlice(.{ .port = 0x4906 }, &[_]u8{0} ** (0x4917 - 0x4906 + 1));
                         core.cpu.set(.ui, std.mem.readIntLittle(u16, input[22..24]));
                         core.cpu.set(.mb, std.mem.readIntLittle(u8, input[25..26]));
                         core.cpu.set(.r, std.mem.readIntLittle(u8, input[26..27]));
@@ -1106,9 +1105,9 @@ test "ezex" {
 
                         var output: [64]u8 = undefined;
 
-                        std.mem.copy(u8, output[0..8], core.mem.cursor[0..8]);
-                        std.mem.copy(u8, output[8..14], core.mem.port0[0..6]);
-                        std.mem.copy(u8, output[14..16], core.mem.sha256_data[14..16]);
+                        core.getSlice(.{ .port = 0x4800 }, output[0..8]);
+                        core.getSlice(.{ .port = 0x0020 }, output[8..14]);
+                        core.getSlice(.{ .port = 0x201E }, output[14..16]);
                         std.mem.writeIntLittle(
                             u32,
                             output[16..20],

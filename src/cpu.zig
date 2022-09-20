@@ -10,7 +10,7 @@ const util = @import("util.zig");
 pub const ExecuteMode = enum { flush, step, run };
 pub const Backend = struct {
     flush: bool = true,
-    execute: *const fn (*Backend, *CEmuCore, ExecuteMode) void,
+    execute: *const fn (*Backend, *Cpu, ExecuteMode) void,
     destroy: *const fn (*Backend, std.mem.Allocator) void,
 };
 
@@ -421,6 +421,46 @@ pub fn setShadow(self: *Cpu, id: RegisterId, value: u24) void {
     }
 }
 
+pub fn init(self: *Cpu, allocator: std.mem.Allocator) !void {
+    self.* = Cpu{
+        .backend = try Interpreter.create(allocator),
+    };
+}
+pub fn deinit(self: *Cpu, allocator: std.mem.Allocator) void {
+    self.backend.destroy(self.backend, allocator);
+}
+
+fn core(self: *Cpu) *CEmuCore {
+    return @fieldParentPtr(CEmuCore, "cpu", self);
+}
+
+pub fn read(self: *Cpu, address: u24) u8 {
+    return self.core().mem.read(address, &self.cycles);
+}
+pub fn write(self: *Cpu, address: u24, value: u8) void {
+    self.core().mem.write(address, value, &self.cycles);
+}
+
+pub fn in(self: *Cpu, address: u16) u8 {
+    return self.core().ports.read(address, &self.cycles);
+}
+pub fn out(self: *Cpu, address: u16, value: u8) void {
+    self.core().ports.write(address, value, &self.cycles);
+}
+
+fn execute(self: *Cpu, mode: ExecuteMode) void {
+    self.backend.execute(self.backend, self, mode);
+}
+pub fn flush(self: *Cpu) void {
+    self.execute(.flush);
+}
+pub fn step(self: *Cpu) void {
+    self.execute(.step);
+}
+pub fn run(self: *Cpu) void {
+    self.execute(.run);
+}
+
 test "registers" {
     var cpu: Cpu = undefined;
     cpu.backend = try Dummy.create(std.testing.allocator);
@@ -518,30 +558,4 @@ test "registers" {
     try std.testing.expectEqual(@as(u24, 0x579ACE), cpu.getShadow(.ubc));
     try std.testing.expectEqual(@as(u24, 0x0369CF), cpu.getShadow(.ude));
     try std.testing.expectEqual(@as(u24, 0x147AD2), cpu.getShadow(.uhl));
-}
-
-pub fn init(self: *Cpu, allocator: std.mem.Allocator) !void {
-    self.* = Cpu{
-        .backend = try Interpreter.create(allocator),
-    };
-}
-pub fn deinit(self: *Cpu, allocator: std.mem.Allocator) void {
-    self.backend.destroy(self.backend, allocator);
-}
-
-pub fn flush(self: *Cpu) void {
-    self.execute(.flush);
-}
-
-pub fn step(self: *Cpu) void {
-    self.execute(.step);
-}
-
-pub fn run(self: *Cpu) void {
-    self.execute(.run);
-}
-
-fn execute(self: *Cpu, mode: ExecuteMode) void {
-    const core = @fieldParentPtr(CEmuCore, "cpu", self);
-    self.backend.execute(self.backend, core, mode);
 }
