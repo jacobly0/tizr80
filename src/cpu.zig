@@ -428,6 +428,7 @@ pub fn init(self: *Cpu, allocator: std.mem.Allocator) !void {
 }
 pub fn deinit(self: *Cpu, allocator: std.mem.Allocator) void {
     self.backend.destroy(self.backend, allocator);
+    self.* = undefined;
 }
 
 fn core(self: *Cpu) *CEmuCore {

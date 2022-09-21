@@ -245,7 +245,7 @@ pub const CEMUCORE_WATCH_ENABLE = @as(cemucore_watch_flags, 1 << 7);
 
 pub const cemucore = opaque {
     fn unwrap(core: *cemucore) *CEmuCore {
-        return @ptrCast(*CEmuCore, core);
+        return @ptrCast(*CEmuCore, @alignCast(@alignOf(CEmuCore), core));
     }
     fn wrap(core: *CEmuCore) *cemucore {
         return @ptrCast(*cemucore, core);
@@ -260,7 +260,8 @@ fn AllocatorWrapper(comptime _: struct {}) type {
         fn allocator(self: *@This()) std.mem.Allocator {
             return self.backing_allocator;
         }
-        fn deinit(_: *@This()) bool {
+        fn deinit(self: *@This()) bool {
+            self.* = undefined;
             return false;
         }
     };
@@ -324,7 +325,7 @@ export fn cemucore_create(
     return CoreWrapper.create(create_flags, sig_handler, sig_handler_data) catch null;
 }
 export fn cemucore_destroy(core: *cemucore) callconv(.C) void {
-    return CoreWrapper.destroy(@ptrCast(*CEmuCore, core));
+    return CoreWrapper.destroy(core.unwrap());
 }
 
 export fn cemucore_get(core: *cemucore, prop: cemucore_prop, addr: i32) callconv(.C) i32 {
@@ -340,7 +341,7 @@ export fn cemucore_get_buffer(
     return core.unwrap().getSlice(prop.unwrapKey(addr), buf[0..len]);
 }
 export fn cemucore_set(core: *cemucore, prop: cemucore_prop, addr: i32, val: i32) callconv(.C) void {
-    return @ptrCast(*CEmuCore, core).set(prop.unwrapKey(addr), switch (val) {
+    return core.unwrap().set(prop.unwrapKey(addr), switch (val) {
         else => @intCast(u24, val),
         -1 => null,
     });
@@ -352,15 +353,15 @@ export fn cemucore_set_buffer(
     buf: [*]const u8,
     len: u32,
 ) callconv(.C) void {
-    return @ptrCast(*CEmuCore, core).setSlice(prop.unwrapKey(addr), buf[0..len]);
+    return core.unwrap().setSlice(prop.unwrapKey(addr), buf[0..len]);
 }
 export fn cemucore_command(core: *cemucore, command: [*:null]?[*:0]u8) callconv(.C) c_int {
-    return @ptrCast(*CEmuCore, core).doCommand(std.mem.sliceTo(command, null));
+    return core.unwrap().doCommand(std.mem.sliceTo(command, null));
 }
 
 export fn cemucore_sleep(core: *cemucore) bool {
-    return @ptrCast(*CEmuCore, core).sleep();
+    return core.unwrap().sleep();
 }
 export fn cemucore_wake(core: *cemucore) bool {
-    return @ptrCast(*CEmuCore, core).wake();
+    return core.unwrap().wake();
 }

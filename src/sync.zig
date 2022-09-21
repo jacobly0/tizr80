@@ -22,7 +22,7 @@ pub fn init(sync: *Sync) !void {
     sync.lock();
 }
 pub fn deinit(sync: *Sync) void {
-    _ = sync;
+    sync.* = undefined;
 }
 
 fn lock(sync: *Sync) void {

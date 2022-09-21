@@ -152,10 +152,12 @@ pub fn deinit(self: *CEmuCore) void {
     self.ports.deinit(self.allocator);
     self.mem.deinit(self.allocator);
     if (self.sync) |*sync| sync.deinit();
+    self.* = undefined;
 }
 pub fn destroy(self: *CEmuCore) void {
+    const allocator = self.allocator;
     self.deinit();
-    self.allocator.destroy(self);
+    allocator.destroy(self);
 }
 
 fn IntTypeForBuffer(buffer: []const u8) type {
@@ -306,4 +308,5 @@ test "single threaded" {
 
 test {
     std.testing.refAllDecls(CEmuCore);
+    _ = @import("as.zig");
 }

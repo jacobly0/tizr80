@@ -15,7 +15,7 @@ pub fn init(self: *Keypad) !void {
     self.* = std.mem.zeroes(Keypad);
 }
 pub fn deinit(self: *Keypad) void {
-    _ = self;
+    self.* = undefined;
 }
 
 pub fn getKey(self: *const Keypad, key: Key) u1 {

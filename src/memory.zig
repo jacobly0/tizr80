@@ -20,6 +20,7 @@ pub fn init(self: *Memory, allocator: std.mem.Allocator) !void {
 pub fn deinit(self: *Memory, allocator: std.mem.Allocator) void {
     allocator.destroy(self.ram);
     allocator.free(self.flash);
+    self.* = undefined;
 }
 
 fn ports(self: *Memory) *Ports {

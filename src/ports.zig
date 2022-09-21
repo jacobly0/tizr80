@@ -29,6 +29,7 @@ pub fn init(self: *Ports, allocator: std.mem.Allocator) !void {
 }
 pub fn deinit(self: *Ports, allocator: std.mem.Allocator) void {
     for (self.handlers) |handler| handler.destroy(handler, allocator);
+    self.* = undefined;
 }
 
 pub fn read(self: *Ports, address: u16, cycles: *u64) u8 {
