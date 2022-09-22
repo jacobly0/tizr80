@@ -1,5 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const Limb = std.math.big.Limb;
 const big_int = std.math.big.int;
 
 const util = @import("../util.zig");
@@ -49,6 +50,10 @@ const Storage = packed union {
 
     const Small = packed struct(usize) {
         const Integer = std.meta.Int(.signed, @bitSizeOf(usize) - 1 - 2);
+        const WideInteger = std.meta.Int(.signed, @bitSizeOf(Integer) + 1);
+        comptime {
+            std.debug.assert(big_int.calcLimbLen(std.math.minInt(Integer)) <= 1);
+        }
 
         tag: enum(u1) { big, small } = .small,
         base: enum(u2) { none, register, ix, iy },
@@ -94,9 +99,9 @@ fn fromContents(contents: Contents) Value {
             .base = .register,
             .integer = @enumToInt(register),
         } },
-        .ix, .iy => |offset| storage: {
+        .ix, .iy => |offset| result: {
             std.debug.assert(offset != 0);
-            break :storage .{ .small = .{ .tag = .small, .base = switch (contents) {
+            break :result .{ .small = .{ .tag = .small, .base = switch (contents) {
                 else => unreachable,
                 .ix => .ix,
                 .iy => .iy,
@@ -115,18 +120,19 @@ pub fn init(allocator: Allocator, base: ?Register, offset: anytype) Allocator.Er
     };
     const offset_info = @typeInfo(offset_type);
     const small_offset = switch (offset_info) {
-        .Int, .ComptimeInt => util.cast(Small, offset),
-        .Struct => offset.to(Small) catch null,
         else => unreachable,
+        .Int, .ComptimeInt => std.math.cast(Small, offset),
+        .Struct => offset.to(Small) catch null,
     };
 
     if (base) |register| switch (register) {
         else => if (small_offset) |small| if (small == 0) return fromContents(.{ .register = register }),
-        .ix, .iy => if (small_offset) |small| return fromContents(switch (register) {
-            .ix => .{ .ix = small },
-            .iy => .{ .iy = small },
-            else => unreachable,
-        }),
+        .ix, .iy => if (small_offset) |small|
+            return fromContents(if (small == 0) .{ .register = register } else switch (register) {
+                else => unreachable,
+                .ix => .{ .ix = small },
+                .iy => .{ .iy = small },
+            }),
     } else if (small_offset) |small| return fromContents(.{ .absolute = small });
 
     const big = try allocator.create(Storage.Big);
@@ -134,12 +140,12 @@ pub fn init(allocator: Allocator, base: ?Register, offset: anytype) Allocator.Er
 
     big.base = base;
     big.offset = try switch (offset_info) {
+        else => unreachable,
         .Int, .ComptimeInt => big_int.Managed.initCapacity(allocator, big_int.calcLimbLen(offset)),
         .Struct => if (@hasDecl(offset_type, "toManaged"))
             offset.toManaged(allocator)
         else
             offset.cloneWithDifferentAllocator(allocator),
-        else => unreachable,
     };
     errdefer big.offset.deinit();
     switch (offset_info) {
@@ -188,6 +194,8 @@ pub fn parseLiteral(allocator: Allocator, literal: []const u8) Error!Value {
         },
     }
 
+    if (number.len == 0) return Error.InvalidLiteral;
+
     var value = try big_int.Managed.initCapacity(
         allocator,
         big_int.calcSetStringLimbCount(base, number.len),
@@ -196,12 +204,12 @@ pub fn parseLiteral(allocator: Allocator, literal: []const u8) Error!Value {
     value.setString(base, number) catch |err| return switch (err) {
         error.InvalidBase => unreachable,
         error.InvalidCharacter => Error.InvalidLiteral,
-        else => @errSetCast(Error, err),
+        else => |e| e,
     };
 
     return init(allocator, null, value);
 }
-pub fn deinit(self: Value) void {
+pub fn deinit(self: *Value) void {
     switch (self.toContents()) {
         else => {},
         .big => |big| {
@@ -210,6 +218,7 @@ pub fn deinit(self: Value) void {
             allocator.destroy(big);
         },
     }
+    self.* = undefined;
 }
 
 pub fn getBase(self: Value) ?Register {
@@ -248,15 +257,82 @@ pub fn isRegisterOffset(self: Value) bool {
 
 pub fn add(lhs: Value, rhs: Value, allocator: Allocator) Error!Value {
     if (lhs.getBase() != null and rhs.getBase() != null) return Error.InvalidOperation;
-    return init(allocator, null, 0);
+    const base = lhs.getBase() orelse rhs.getBase();
+    switch (lhs.getOffset()) {
+        .small => |lhs_small| switch (rhs.getOffset()) {
+            .small => |rhs_small| return init(
+                allocator,
+                base,
+                @as(Storage.Small.WideInteger, lhs_small) + rhs_small,
+            ),
+            .big => |rhs_big| {
+                var result = try big_int.Managed.initCapacity(allocator, rhs_big.limbs.len + 1);
+                defer result.deinit();
+                var mutable = result.toMutable();
+                mutable.addScalar(rhs_big, lhs_small);
+                return init(allocator, base, result.toConst());
+            },
+        },
+        .big => |lhs_big| switch (rhs.getOffset()) {
+            .small => |rhs_small| {
+                var result = try big_int.Managed.initCapacity(allocator, lhs_big.limbs.len + 1);
+                defer result.deinit();
+                var mutable = result.toMutable();
+                mutable.addScalar(lhs_big, rhs_small);
+                return init(allocator, base, result.toConst());
+            },
+            .big => |rhs_big| {
+                var result = try big_int.Managed.initCapacity(allocator, lhs_big.limbs.len + 1);
+                defer result.deinit();
+                var mutable = result.toMutable();
+                mutable.add(lhs_big, rhs_big);
+                return init(allocator, base, result.toConst());
+            },
+        },
+    }
 }
 pub fn subtract(lhs: Value, rhs: Value, allocator: Allocator) Error!Value {
-    if (lhs.getBase() != rhs.getBase()) return Error.InvalidOperation;
-    return init(allocator, null, 0);
+    const different_bases = lhs.getBase() != rhs.getBase();
+    if (different_bases and rhs.getBase() != null) return Error.InvalidOperation;
+    const base = if (different_bases) lhs.getBase() else null;
+    switch (lhs.getOffset()) {
+        .small => |lhs_small| switch (rhs.getOffset()) {
+            .small => |rhs_small| return init(
+                allocator,
+                base,
+                @as(Storage.Small.WideInteger, lhs_small) - rhs_small,
+            ),
+            .big => |rhs_big| {
+                var result = try big_int.Managed.initCapacity(allocator, rhs_big.limbs.len + 1);
+                defer result.deinit();
+                var mutable = result.toMutable();
+                mutable.addScalar(rhs_big.negate(), lhs_small);
+                return init(allocator, base, result.toConst());
+            },
+        },
+        .big => |lhs_big| switch (rhs.getOffset()) {
+            .small => |rhs_small| {
+                var result = try big_int.Managed.initCapacity(allocator, lhs_big.limbs.len + 1);
+                defer result.deinit();
+                var mutable = result.toMutable();
+                mutable.addScalar(lhs_big, -rhs_small);
+                return init(allocator, base, result.toConst());
+            },
+            .big => |rhs_big| {
+                var result = try big_int.Managed.initCapacity(allocator, lhs_big.limbs.len + 1);
+                defer result.deinit();
+                var mutable = result.toMutable();
+                mutable.add(lhs_big, rhs_big.negate());
+                return init(allocator, base, result.toConst());
+            },
+        },
+    }
 }
 pub fn multiply(lhs: Value, rhs: Value, allocator: Allocator) Error!Value {
     if (lhs.getBase() != null or rhs.getBase() != null) return Error.InvalidOperation;
-    return init(allocator, null, 0);
+
+    _ = allocator;
+    std.debug.todo("unimplemented");
 }
 pub fn divide(lhs: Value, rhs: Value, allocator: Allocator) Error!Value {
     if (lhs.getBase() != null or rhs.getBase() != null) return Error.InvalidOperation;
@@ -264,17 +340,21 @@ pub fn divide(lhs: Value, rhs: Value, allocator: Allocator) Error!Value {
         .small => |lhs_small| switch (rhs.getOffset()) {
             .small => |rhs_small| {
                 _ = .{ lhs_small, rhs_small };
+                std.debug.todo("small / small");
             },
             .big => |rhs_big| {
                 _ = .{ lhs_small, rhs_big };
+                std.debug.todo("small / big");
             },
         },
         .big => |lhs_big| switch (rhs.getOffset()) {
             .small => |rhs_small| {
                 _ = .{ lhs_big, rhs_small };
+                std.debug.todo("big / small");
             },
             .big => |rhs_big| {
                 _ = .{ lhs_big, rhs_big };
+                std.debug.todo("big / big");
             },
         },
     });
@@ -306,7 +386,7 @@ pub fn format(
 }
 
 fn testGetFormat(string: []const u8, base: ?Register, offset: anytype) !void {
-    const value = try Value.init(std.testing.allocator, base, offset);
+    var value = try Value.init(std.testing.allocator, base, offset);
     defer value.deinit();
 
     try std.testing.expectEqual(base, value.getBase());

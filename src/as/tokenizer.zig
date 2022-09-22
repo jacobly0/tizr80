@@ -13,12 +13,14 @@ pub const Keyword = enum {
     add,
     af,
     @"af'",
+    @"and",
     b,
     bc,
     bit,
     c,
     call,
     ccf,
+    cp,
     cpd,
     cpdr,
     cpi,
@@ -38,6 +40,7 @@ pub const Keyword = enum {
     ex,
     exx,
     h,
+    halt,
     hl,
     i,
     il,
@@ -84,6 +87,7 @@ pub const Keyword = enum {
     neg,
     nop,
     nz,
+    @"or",
     org,
     otd2r,
     otdm,
@@ -137,6 +141,7 @@ pub const Keyword = enum {
     stmix,
     sub,
     tst,
+    xor,
     z,
 };
 
@@ -177,30 +182,35 @@ pub const Token = union(enum) {
             .dollar => writer.print("<{s}:{c}>", .{ "DOLLAR", '$' }),
             .lparen => writer.print("<{s}:{c}>", .{ "LPAREN", '(' }),
             .rparen => writer.print("<{s}:{c}>", .{ "RPAREN", ')' }),
+            .times => writer.print("<{s}:{c}>", .{ "TIMES", '*' }),
             .plus => writer.print("<{s}:{c}>", .{ "PLUS", '+' }),
             .comma => writer.print("<{s}:{c}>", .{ "COMMA", ',' }),
             .minus => writer.print("<{s}:{c}>", .{ "MINUS", '-' }),
             .dot => writer.print("<{s}:{c}>", .{ "DOT", '.' }),
+            .divide => writer.print("<{s}:{c}>", .{ "DIVIDE", '/' }),
             .colon => writer.print("<{s}:{c}>", .{ "COLON", ':' }),
             .backslash => writer.print("<{s}:{c}>", .{ "BACKSLASH", '\\' }),
         };
     }
 };
 
-index: usize = 0,
 source: [:0]const u8,
+index: usize = 0,
+start: usize = 0,
+bol: usize = 0,
 
 pub fn init(source: [:0]const u8) Tokenizer {
     return .{ .source = source };
 }
 
 pub fn next(self: *Tokenizer) Error!Token {
-    var index = self.index;
     const source = self.source;
+    var index = self.index;
     defer self.index = index;
 
     while (true) {
         const start = index;
+        self.start = start;
         index += 1;
         switch (source[start]) {
             0 => {
@@ -210,6 +220,7 @@ pub fn next(self: *Tokenizer) Error!Token {
             '\t', ' ' => continue,
             '\n', '\r' => {
                 if (source[start] == '\r' and source[index] == '\n') index += 1;
+                self.bol = index;
                 return .eol;
             },
             '"', '\'' => {
@@ -232,7 +243,8 @@ pub fn next(self: *Tokenizer) Error!Token {
                     '0'...'9', 'A'...'Z', 'a'...'z' => true,
                     else => false,
                 }) index += 1;
-                return .{ .literal = source[start..index] };
+                const literal = source[start..index];
+                return if (std.mem.eql(u8, literal, "$")) .dollar else .{ .literal = literal };
             },
             '(' => return .lparen,
             ')' => return .rparen,
@@ -277,6 +289,22 @@ pub fn peek(self: *Tokenizer) Error!Token {
     const token = self.next();
     self.index = index;
     return token;
+}
+
+pub fn debugPrintLocation(self: *Tokenizer) void {
+    const source = self.source;
+    var index = self.bol;
+    while (switch (source[index]) {
+        else => true,
+        0, '\n', '\r' => false,
+    }) index += 1;
+    std.debug.print("\n{s}\n", .{self.source[self.bol..index]});
+    index = self.bol;
+    while (index < self.start) : (index += 1) std.debug.print("{c}", .{@as(u8, switch (source[index]) {
+        else => ' ',
+        '\t' => '\t',
+    })});
+    std.debug.print("^\n", .{});
 }
 
 test "tokenizer" {
