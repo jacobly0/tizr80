@@ -3,12 +3,14 @@ const std = @import("std");
 const CEmuCore = @import("cemucore.zig");
 const Memory = @This();
 const Ports = @import("ports.zig");
+const util = @import("util.zig");
 
-pub const ram_start = 0xD00000;
-pub const ram_end = ram_start + @as(Memory, undefined).ram.len - 1;
+pub const ram_start: u24 = 0xD00000;
+pub const ram_len: u19 = 0x40000 + 320 * 240 * 2;
+pub const ram_end: u24 = ram_start + ram_len - 1;
 
 flash: []u8,
-ram: *[0x40000 + 320 * 240 * 2]u8,
+ram: *[ram_len]u8,
 
 pub fn init(self: *Memory, allocator: std.mem.Allocator) !void {
     self.flash = try allocator.alloc(u8, 0x400000);
@@ -27,24 +29,23 @@ fn ports(self: *Memory) *Ports {
     return &@fieldParentPtr(CEmuCore, "mem", self).ports;
 }
 fn mmio(address: u24, cycles: *u64) ?u16 {
-    const addr = @intCast(u8, address >> 16);
-    return @as(u16, switch (addr) {
+    return util.bit.concat(.{ @intCast(u4, switch (util.bit.extract(address, u8, 16)) {
         else => unreachable,
-        0xE0...0xE3 => 0x1 + addr - 0xE0,
+        0xE0...0xE3 => |addr| 0x1 + addr - 0xE0,
         0xE4, 0xFF => {
             cycles.* +%= 2;
             return null;
         },
-        0xF0...0xFA => 0x5 + addr - 0xF0,
+        0xF0...0xFA => |addr| 0x5 + addr - 0xF0,
         0xFB, 0xFE => {
             cycles.* +%= 3;
             return null;
         },
-    }) << 12 | @truncate(u12, address);
+    }), util.bit.extract(address, u12, 0) });
 }
 
 pub fn read(self: *Memory, address: u24, cycles: *u64) u8 {
-    switch (@truncate(u4, address >> 20)) {
+    switch (util.bit.extract(address, u4, 20)) {
         0x0...0xC => if (address < self.flash.len) {
             cycles.* +%= 10;
             return self.flash[address];
@@ -52,7 +53,7 @@ pub fn read(self: *Memory, address: u24, cycles: *u64) u8 {
             cycles.* +%= 258;
             return undefined;
         },
-        ram_start >> 20...ram_end >> 20 => {
+        util.bit.extract(ram_start, u4, 20)...util.bit.extract(ram_end, u4, 20) => {
             cycles.* +%= 4;
             return switch (address) {
                 ram_start...ram_end => self.ram[address - ram_start],
@@ -63,14 +64,14 @@ pub fn read(self: *Memory, address: u24, cycles: *u64) u8 {
     }
 }
 pub fn write(self: *Memory, address: u24, value: u8, cycles: *u64) void {
-    switch (@truncate(u4, address >> 20)) {
+    switch (util.bit.extract(address, u4, 20)) {
         0x0...0xC => if (address < self.flash.len) {
             cycles.* +%= 10;
             self.flash[address] = value;
         } else {
             cycles.* +%= 258;
         },
-        ram_start >> 20...ram_end >> 20 => {
+        util.bit.extract(ram_start, u4, 20)...util.bit.extract(ram_end, u4, 20) => {
             cycles.* +%= 2;
             switch (address) {
                 ram_start...ram_end => self.ram[address - ram_start] = value,

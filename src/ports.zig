@@ -33,13 +33,13 @@ pub fn deinit(self: *Ports, allocator: std.mem.Allocator) void {
 }
 
 pub fn read(self: *Ports, address: u16, cycles: *u64) u8 {
-    const handler = self.handlers[address >> 12];
-    return handler.read(handler, @truncate(u12, address), cycles);
+    const handler = self.handlers[util.bit.extract(address, u4, 12)];
+    return handler.read(handler, util.bit.extract(address, u12, 0), cycles);
 }
 
 pub fn write(self: *Ports, address: u16, value: u8, cycles: *u64) void {
-    const handler = self.handlers[address >> 12];
-    handler.write(handler, @truncate(u12, address), value, cycles);
+    const handler = self.handlers[util.bit.extract(address, u4, 12)];
+    handler.write(handler, util.bit.extract(address, u12, 0), value, cycles);
 }
 
 pub fn peek(self: *Ports, address: u16) u8 {

@@ -108,6 +108,7 @@ pub fn build(b: *std.build.Builder) !void {
         test_api.linkLibrary(library);
         test_api.linkLibC();
 
-        test_step.dependOn(&test_api.run().step);
+        if (test_filter == null or std.mem.indexOf(u8, "capi-" ++ field.name, test_filter.?) != null)
+            test_step.dependOn(&test_api.run().step);
     }
 }

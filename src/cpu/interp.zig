@@ -104,22 +104,19 @@ const State = struct {
 
     fn maskWord(word: u24, mode: Decode.Mode.Instruction) u24 {
         return switch (mode) {
-            .s => @truncate(u16, word),
+            .s => util.bit.extract(word, u16, 0),
             .l => word,
         };
     }
     fn effectiveAddress(self: *State, address: u24, mode: Decode.Mode.Instruction) u24 {
         return switch (mode) {
-            .s => (Cpu.Long{ .ext = .{
-                .word = @truncate(u16, address),
-                .upper = self.cpu.mbi.ext.upper,
-            } }).long,
+            .s => util.bit.insert(address, self.cpu.mbi.ext.upper, 16),
             .l => address,
         };
     }
 
     pub fn truncate(self: *State, comptime narrow: type) error{}!void {
-        self.accumulator = @truncate(narrow, @intCast(u24, self.accumulator));
+        self.accumulator = util.bit.extract(@intCast(u24, self.accumulator), narrow, 0);
     }
     pub fn maskWordInstruction(self: *State) error{}!void {
         self.accumulator = maskWord(@intCast(u24, self.accumulator), self.mode.inst);
@@ -153,22 +150,22 @@ const State = struct {
         }
     }
     pub fn fetchWord(self: *State, comptime prefetch_mode: Decode.PrefetchMode) error{}!void {
-        var word: i32 = 0;
+        var word: u24 = 0;
 
         try self.fetchByte(.prefetch);
-        word |= self.accumulator << 0;
+        word = util.bit.insert(word, @intCast(u8, self.accumulator), 0);
 
         switch (self.mode.imm) {
             .is => {
                 try self.fetchByte(prefetch_mode);
-                word |= self.accumulator << 8;
+                word = util.bit.insert(word, @intCast(u8, self.accumulator), 8);
             },
             .il => {
                 try self.fetchByte(.prefetch);
-                word |= self.accumulator << 8;
+                word = util.bit.insert(word, @intCast(u8, self.accumulator), 8);
 
                 try self.fetchByte(prefetch_mode);
-                word |= self.accumulator << 16;
+                word = util.bit.insert(word, @intCast(u8, self.accumulator), 16);
             },
         }
 
@@ -242,7 +239,9 @@ const State = struct {
         self.accumulator = self.cpu.get(id);
     }
     pub fn loadRegisterHigh(self: *State, comptime id: Cpu.RegisterId) error{}!void {
-        self.accumulator |= self.cpu.get(id) << 8;
+        self.accumulator = util.bit.concat(
+            .{ @intCast(u8, self.cpu.get(id)), @intCast(u8, self.accumulator) },
+        );
     }
     pub fn loadShadowRegister(self: *State, comptime id: Cpu.RegisterId) error{}!void {
         self.accumulator = self.cpu.getShadow(id);
@@ -265,8 +264,8 @@ const State = struct {
     }
     pub fn storeRegisterHigh(self: *State, comptime id: Cpu.RegisterId) error{}!void {
         const word = @intCast(u16, self.accumulator);
-        self.cpu.set(id, word >> 8);
-        self.accumulator = @truncate(u8, word);
+        self.cpu.set(id, util.bit.extract(word, u8, 8));
+        self.accumulator = util.bit.extract(word, u8, 0);
     }
     pub fn storeRegisterInstruction(
         self: *State,
@@ -283,7 +282,7 @@ const State = struct {
     }
     fn storeStackPointer(self: *State, mode: Decode.Mode.Instruction) void {
         switch (mode) {
-            .s => self.cpu.set(.sps, @truncate(u16, @intCast(u24, self.address))),
+            .s => self.cpu.set(.sps, util.bit.extract(@intCast(u24, self.address), u16, 0)),
             .l => self.cpu.set(.spl, @intCast(u24, self.address)),
         }
     }
@@ -320,7 +319,7 @@ const State = struct {
     }
 
     pub fn in(self: *State) error{}!void {
-        self.accumulator = self.cpu.in(@truncate(u16, @intCast(u24, self.address)));
+        self.accumulator = self.cpu.in(util.bit.extract(@intCast(u24, self.address), u16, 0));
     }
     pub fn inFlags(self: *State) error{}!void {
         self.cpu.nf = false;
@@ -330,26 +329,31 @@ const State = struct {
         self.accumulator = self.cpu.read(@intCast(u24, self.address));
     }
     pub fn readMemoryWord(self: *State) error{}!void {
+        var word: u24 = 0;
+
         try self.readMemoryByte();
-        var word = self.accumulator << 0;
+        word = util.bit.insert(word, @intCast(u8, self.accumulator), 0);
 
         try self.addAddress(1);
         try self.maskAddressInstruction();
         try self.readMemoryByte();
-        word |= self.accumulator << 8;
+        word = util.bit.insert(word, @intCast(u8, self.accumulator), 8);
 
         if (self.mode.inst == .l) {
             try self.addAddress(1);
             try self.maskAddressInstruction();
             try self.readMemoryByte();
-            word |= self.accumulator << 16;
+            word = util.bit.insert(word, @intCast(u8, self.accumulator), 16);
         }
 
         self.accumulator = word;
     }
 
     pub fn out(self: *State) error{}!void {
-        self.cpu.out(@truncate(u16, @intCast(u24, self.address)), @intCast(u8, self.accumulator));
+        self.cpu.out(
+            util.bit.extract(@intCast(u24, self.address), u16, 0),
+            @intCast(u8, self.accumulator),
+        );
     }
     pub fn writeMemoryByte(self: *State) error{}!void {
         self.cpu.write(@intCast(u24, self.address), @intCast(u8, self.accumulator));
@@ -358,35 +362,35 @@ const State = struct {
         const word = @intCast(u24, self.accumulator);
         switch (direction) {
             .forward => {
-                self.accumulator = @truncate(u8, word >> 0);
+                self.accumulator = util.bit.extract(word, u8, 0);
                 try self.writeMemoryByte();
 
                 try self.addAddress(1);
                 try self.maskAddressInstruction();
-                self.accumulator = @truncate(u8, word >> 8);
+                self.accumulator = util.bit.extract(word, u8, 8);
                 try self.writeMemoryByte();
 
                 if (self.mode.inst == .l) {
                     try self.addAddress(1);
                     try self.maskAddressInstruction();
-                    self.accumulator = @truncate(u8, word >> 16);
+                    self.accumulator = util.bit.extract(word, u8, 16);
                     try self.writeMemoryByte();
                 }
             },
             .reverse => {
                 if (self.mode.inst == .l) {
-                    self.accumulator = @truncate(u8, word >> 16);
+                    self.accumulator = util.bit.extract(word, u8, 16);
                     try self.writeMemoryByte();
                     try self.addAddress(-1);
                     try self.maskAddressInstruction();
                 }
 
-                self.accumulator = @truncate(u8, word >> 8);
+                self.accumulator = util.bit.extract(word, u8, 8);
                 try self.writeMemoryByte();
                 try self.addAddress(-1);
                 try self.maskAddressInstruction();
 
-                self.accumulator = @truncate(u8, word >> 0);
+                self.accumulator = util.bit.extract(word, u8, 0);
                 try self.writeMemoryByte();
             },
         }
@@ -400,7 +404,7 @@ const State = struct {
             if (self.cpu.mode.adl == .ez80) {
                 self.address = self.cpu.spl.long;
                 try self.addAddress(-1);
-                self.accumulator = @truncate(u8, pc >> 16);
+                self.accumulator = util.bit.extract(pc, u8, 16);
                 try self.writeMemoryByte();
 
                 try self.addAddress(-1);
@@ -412,12 +416,12 @@ const State = struct {
             self.loadStackPointer(stack);
             try self.addAddress(-1);
             self.maskAddress(stack);
-            self.accumulator = @truncate(u8, pc >> 8);
+            self.accumulator = util.bit.extract(pc, u8, 8);
             try self.writeMemoryByte();
 
             try self.addAddress(-1);
             self.maskAddress(stack);
-            self.accumulator = @truncate(u8, pc >> 0);
+            self.accumulator = util.bit.extract(pc, u8, 0);
             try self.writeMemoryByte();
             self.storeStackPointer(stack);
 
@@ -453,7 +457,7 @@ const State = struct {
             if (self.cpu.mode.adl == .ez80) {
                 self.address = self.cpu.spl.long;
                 try self.addAddress(-1);
-                self.accumulator = @truncate(u8, pc >> 16);
+                self.accumulator = util.bit.extract(pc, u8, 16);
                 try self.writeMemoryByte();
 
                 if (self.mode.imm == .is) {
@@ -470,12 +474,12 @@ const State = struct {
             self.loadStackPointer(stack);
             try self.addAddress(-1);
             self.maskAddress(stack);
-            self.accumulator = @truncate(u8, pc >> 8);
+            self.accumulator = util.bit.extract(pc, u8, 8);
             try self.writeMemoryByte();
 
             try self.addAddress(-1);
             self.maskAddress(stack);
-            self.accumulator = @truncate(u8, pc >> 0);
+            self.accumulator = util.bit.extract(pc, u8, 0);
             try self.writeMemoryByte();
             self.storeStackPointer(stack);
 
@@ -498,19 +502,21 @@ const State = struct {
         if (self.mode.suffix) {
             self.address = self.cpu.get(.spl);
             try self.readMemoryByte();
-            const adl = @intToEnum(Cpu.Adl, @truncate(u1, @intCast(u8, self.accumulator)));
+            const adl = @intToEnum(Cpu.Adl, util.bit.extract(@intCast(u8, self.accumulator), u1, 0));
             try self.addAddress(1);
             self.cpu.set(.spl, @intCast(u24, self.address));
+
+            var pc: u24 = 0;
 
             try self.loadStackPointerAdl();
             try self.maskAddressAdl();
             try self.readMemoryByte();
-            var pc: i32 = self.accumulator << 0;
+            pc = util.bit.insert(pc, @intCast(u8, self.accumulator), 0);
 
             try self.addAddress(1);
             try self.maskAddressAdl();
             try self.readMemoryByte();
-            pc |= self.accumulator << 8;
+            pc = util.bit.insert(pc, @intCast(u8, self.accumulator), 8);
 
             try self.addAddress(1);
             try self.storeStackPointerAdl();
@@ -519,7 +525,7 @@ const State = struct {
                 self.address = self.cpu.get(.spl);
                 try self.readMemoryByte();
                 if (self.mode.inst == .l or self.cpu.mode.adl == .ez80)
-                    pc |= self.accumulator << 16;
+                    pc = util.bit.insert(pc, @intCast(u8, self.accumulator), 16);
                 try self.addAddress(1);
                 self.cpu.set(.spl, @intCast(u24, self.address));
             }
@@ -561,14 +567,14 @@ const State = struct {
 
     pub fn rlcByte(self: *State) error{}!void {
         const byte = @intCast(u8, self.accumulator);
-        self.cpu.set(.cf, @truncate(u1, byte >> 7));
+        self.cpu.set(.cf, util.bit.extract(byte, u1, 7));
         self.cpu.nf = false;
         self.cpu.hc = false;
         self.accumulator = std.math.rotl(u8, byte, 1);
     }
     pub fn rrcByte(self: *State) error{}!void {
         const byte = @intCast(u8, self.accumulator);
-        self.cpu.set(.cf, @truncate(u1, byte >> 0));
+        self.cpu.set(.cf, util.bit.extract(byte, u1, 0));
         self.cpu.nf = false;
         self.cpu.hc = false;
         self.accumulator = std.math.rotr(u8, byte, 1);
@@ -576,50 +582,50 @@ const State = struct {
     pub fn rlByte(self: *State) error{}!void {
         const carry = @boolToInt(self.cpu.cf);
         const byte = @intCast(u8, self.accumulator);
-        self.cpu.set(.cf, @truncate(u1, byte >> 7));
+        self.cpu.set(.cf, util.bit.extract(byte, u1, 7));
         self.cpu.nf = false;
         self.cpu.hc = false;
-        self.accumulator = byte << 1 | @as(u8, carry) << 0;
+        self.accumulator = util.bit.insert(byte << 1, carry, 0);
     }
     pub fn rrByte(self: *State) error{}!void {
         const carry = @boolToInt(self.cpu.cf);
         const byte = @intCast(u8, self.accumulator);
-        self.cpu.set(.cf, @truncate(u1, byte >> 0));
+        self.cpu.set(.cf, util.bit.extract(byte, u1, 0));
         self.cpu.nf = false;
         self.cpu.hc = false;
-        self.accumulator = byte >> 1 | @as(u8, carry) << 7;
+        self.accumulator = util.bit.insert(byte >> 1, carry, 7);
     }
     pub fn slaByte(self: *State) error{}!void {
         const byte = @intCast(u8, self.accumulator);
-        self.cpu.set(.cf, @truncate(u1, byte >> 7));
+        self.cpu.set(.cf, util.bit.extract(byte, u1, 7));
         self.cpu.nf = false;
         self.cpu.hc = false;
         self.accumulator = byte << 1;
     }
     pub fn sraByte(self: *State) error{}!void {
         const byte = @intCast(u8, self.accumulator);
-        self.cpu.set(.cf, @truncate(u1, byte >> 0));
+        self.cpu.set(.cf, util.bit.extract(byte, u1, 0));
         self.cpu.nf = false;
         self.cpu.hc = false;
         self.accumulator = @bitCast(u8, @bitCast(i8, byte) >> 1);
     }
     pub fn srlByte(self: *State) error{}!void {
         const byte = @intCast(u8, self.accumulator);
-        self.cpu.set(.cf, @truncate(u1, byte >> 0));
+        self.cpu.set(.cf, util.bit.extract(byte, u1, 0));
         self.cpu.nf = false;
         self.cpu.hc = false;
         self.accumulator = byte >> 1;
     }
     pub fn daaByte(self: *State) error{}!void {
         const byte = @intCast(u8, self.accumulator);
-        const low = @truncate(u4, byte);
+        const low = util.bit.extract(byte, u4, 0);
 
         const low_offset: u4 = if (self.cpu.hc or low > 0x9) 0x10 - 0xA else 0;
 
-        if (@as(u9, byte) + low_offset >> 4 > 0x9) self.cpu.cf = true;
-        const high_offset: u8 = if (self.cpu.cf) 0x10 - 0xA else 0;
+        if (util.bit.extract(@as(u9, byte) + low_offset, u5, 4) > 0x9) self.cpu.cf = true;
+        const high_offset: u4 = if (self.cpu.cf) 0x10 - 0xA else 0;
 
-        const offset = high_offset << 4 | low_offset;
+        const offset = util.bit.concat(.{ high_offset, low_offset });
         var result: u8 = undefined;
         var low_result: u4 = undefined;
         if (self.cpu.nf) {
@@ -641,11 +647,8 @@ const State = struct {
         self.cpu.hc = true;
         self.accumulator &= 1 << bit;
     }
-    pub fn resByte(self: *State, comptime bit: u3) error{}!void {
-        self.accumulator &= ~@as(u8, 1 << bit);
-    }
-    pub fn setByte(self: *State, comptime bit: u3) error{}!void {
-        self.accumulator |= 1 << bit;
+    pub fn setByteBit(self: *State, comptime bit: u3, comptime value: u1) error{}!void {
+        self.accumulator = util.bit.insert(@intCast(u8, self.accumulator), value, bit);
     }
     pub fn setSubtractByteSign(self: *State) error{}!void {
         self.cpu.nf = @bitCast(i8, @intCast(u8, self.accumulator)) < 0;
@@ -683,8 +686,8 @@ const State = struct {
         var signed_result: i8 = undefined;
         self.cpu.pv = @addWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
 
-        const low_lhs = @truncate(u4, unsigned_lhs);
-        const low_rhs = @truncate(u4, unsigned_rhs);
+        const low_lhs = util.bit.extract(unsigned_lhs, u4, 0);
+        const low_rhs = util.bit.extract(unsigned_rhs, u4, 0);
         var low_result: u4 = undefined;
         self.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) != self.cpu.nf;
 
@@ -700,8 +703,8 @@ const State = struct {
         self.cpu.cf = false;
         self.cpu.pv = false;
 
-        const low_lhs = @truncate(u4, unsigned_lhs);
-        const low_rhs = @truncate(u4, unsigned_rhs);
+        const low_lhs = util.bit.extract(unsigned_lhs, u4, 0);
+        const low_rhs = util.bit.extract(unsigned_rhs, u4, 0);
         var low_result: u4 = undefined;
         self.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) != (rhs < 0);
 
@@ -738,8 +741,8 @@ const State = struct {
         var signed_result: i8 = undefined;
         self.cpu.pv = @addWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
 
-        const low_lhs = @truncate(u4, unsigned_lhs);
-        const low_rhs = @truncate(u4, unsigned_rhs);
+        const low_lhs = util.bit.extract(unsigned_lhs, u4, 0);
+        const low_rhs = util.bit.extract(unsigned_rhs, u4, 0);
         var low_result: u4 = undefined;
         self.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result);
 
@@ -763,8 +766,8 @@ const State = struct {
         const signed_result = @bitCast(i8, unsigned_result);
         self.cpu.pv = @as(i9, signed_lhs) + signed_rhs + carry != signed_result;
 
-        const low_lhs = @truncate(u4, unsigned_lhs);
-        const low_rhs = @truncate(u4, unsigned_rhs);
+        const low_lhs = util.bit.extract(unsigned_lhs, u4, 0);
+        const low_rhs = util.bit.extract(unsigned_rhs, u4, 0);
         var low_result: u4 = undefined;
         self.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) or
             @addWithOverflow(u4, low_result, carry, &low_result);
@@ -786,8 +789,8 @@ const State = struct {
         var signed_result: i8 = undefined;
         self.cpu.pv = @subWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
 
-        const low_lhs = @truncate(u4, unsigned_lhs);
-        const low_rhs = @truncate(u4, unsigned_rhs);
+        const low_lhs = util.bit.extract(unsigned_lhs, u4, 0);
+        const low_rhs = util.bit.extract(unsigned_rhs, u4, 0);
         var low_result: u4 = undefined;
         self.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result);
 
@@ -811,8 +814,8 @@ const State = struct {
         const signed_result = @bitCast(i8, unsigned_result);
         self.cpu.pv = @as(i9, signed_lhs) - signed_rhs - carry != signed_result;
 
-        const low_lhs = @truncate(u4, unsigned_lhs);
-        const low_rhs = @truncate(u4, unsigned_rhs);
+        const low_lhs = util.bit.extract(unsigned_lhs, u4, 0);
+        const low_rhs = util.bit.extract(unsigned_rhs, u4, 0);
         var low_result: u4 = undefined;
         self.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result) or
             @subWithOverflow(u4, low_result, carry, &low_result);
@@ -850,13 +853,13 @@ const State = struct {
     }
     pub fn mltBytes(self: *State) error{}!void {
         const input = @intCast(u24, self.accumulator);
-        const lhs = @truncate(u8, input >> 8);
-        const rhs = @truncate(u8, input >> 0);
+        const lhs = util.bit.extract(input, u8, 8);
+        const rhs = util.bit.extract(input, u8, 0);
         self.accumulator = std.math.mulWide(u8, lhs, rhs);
     }
     const Digits = packed struct(u16) { mem_low: u4, mem_high: u4, a_low: u4, a_high: u4 };
     fn rdBytesFlags(self: *State) void {
-        const byte = @truncate(u8, @intCast(u16, self.accumulator) >> 8);
+        const byte = util.bit.extract(@intCast(u16, self.accumulator), u8, 8);
         self.cpu.nf = false;
         self.cpu.pv = @popCount(byte) & 1 == 0;
         self.cpu.hc = false;
@@ -887,15 +890,15 @@ const State = struct {
     fn addWordsWidth(self: *State, comptime width: comptime_int) void {
         const UnsignedInt = std.meta.Int(.unsigned, width);
 
-        const unsigned_lhs = @truncate(UnsignedInt, @intCast(u24, self.accumulator));
-        const unsigned_rhs = @truncate(UnsignedInt, @intCast(u24, self.address));
+        const unsigned_lhs = util.bit.extract(@intCast(u24, self.accumulator), UnsignedInt, 0);
+        const unsigned_rhs = util.bit.extract(@intCast(u24, self.address), UnsignedInt, 0);
         var unsigned_result: UnsignedInt = undefined;
         self.cpu.cf = @addWithOverflow(UnsignedInt, unsigned_lhs, unsigned_rhs, &unsigned_result);
 
         self.cpu.nf = false;
 
-        const low_lhs = @truncate(u12, unsigned_lhs);
-        const low_rhs = @truncate(u12, unsigned_rhs);
+        const low_lhs = util.bit.extract(unsigned_lhs, u12, 0);
+        const low_rhs = util.bit.extract(unsigned_rhs, u12, 0);
         var low_result: u12 = undefined;
         self.cpu.hc = @addWithOverflow(u12, low_lhs, low_rhs, &low_result);
 
@@ -913,8 +916,8 @@ const State = struct {
 
         const carry = @boolToInt(self.cpu.cf);
 
-        const unsigned_lhs = @truncate(UnsignedInt, @intCast(u24, self.accumulator));
-        const unsigned_rhs = @truncate(UnsignedInt, @intCast(u24, self.address));
+        const unsigned_lhs = util.bit.extract(@intCast(u24, self.accumulator), UnsignedInt, 0);
+        const unsigned_rhs = util.bit.extract(@intCast(u24, self.address), UnsignedInt, 0);
         var unsigned_result: UnsignedInt = undefined;
         const cf = @addWithOverflow(UnsignedInt, unsigned_lhs, unsigned_rhs, &unsigned_result);
         self.cpu.cf = @addWithOverflow(UnsignedInt, unsigned_result, carry, &unsigned_result) or cf;
@@ -927,8 +930,8 @@ const State = struct {
         self.cpu.pv = @as(std.meta.Int(.signed, width + 1), signed_lhs) + signed_rhs + carry !=
             signed_result;
 
-        const low_lhs = @truncate(u12, unsigned_lhs);
-        const low_rhs = @truncate(u12, unsigned_rhs);
+        const low_lhs = util.bit.extract(unsigned_lhs, u12, 0);
+        const low_rhs = util.bit.extract(unsigned_rhs, u12, 0);
         var low_result: u12 = undefined;
         self.cpu.hc = @addWithOverflow(u12, low_lhs, low_rhs, &low_result) or
             @addWithOverflow(u12, low_result, carry, &low_result);
@@ -950,8 +953,8 @@ const State = struct {
 
         const carry = @boolToInt(self.cpu.cf);
 
-        const unsigned_lhs = @truncate(UnsignedInt, @intCast(u24, self.accumulator));
-        const unsigned_rhs = @truncate(UnsignedInt, @intCast(u24, self.address));
+        const unsigned_lhs = util.bit.extract(@intCast(u24, self.accumulator), UnsignedInt, 0);
+        const unsigned_rhs = util.bit.extract(@intCast(u24, self.address), UnsignedInt, 0);
         var unsigned_result: UnsignedInt = undefined;
         const cf = @subWithOverflow(UnsignedInt, unsigned_lhs, unsigned_rhs, &unsigned_result);
         self.cpu.cf = @subWithOverflow(UnsignedInt, unsigned_result, carry, &unsigned_result) or cf;
@@ -964,8 +967,8 @@ const State = struct {
         self.cpu.pv = @as(std.meta.Int(.signed, width + 1), signed_lhs) -% signed_rhs -% carry !=
             signed_result;
 
-        const low_lhs = @truncate(u12, unsigned_lhs);
-        const low_rhs = @truncate(u12, unsigned_rhs);
+        const low_lhs = util.bit.extract(unsigned_lhs, u12, 0);
+        const low_rhs = util.bit.extract(unsigned_rhs, u12, 0);
         var low_result: u12 = undefined;
         self.cpu.hc = @subWithOverflow(u12, low_lhs, low_rhs, &low_result) or
             @subWithOverflow(u12, low_result, carry, &low_result);
@@ -993,8 +996,8 @@ const State = struct {
 
         self.cpu.nf = true;
 
-        const low_lhs = @truncate(u4, lhs);
-        const low_rhs = @truncate(u4, rhs);
+        const low_lhs = util.bit.extract(lhs, u4, 0);
+        const low_rhs = util.bit.extract(rhs, u4, 0);
         var low_result: u4 = undefined;
         self.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result);
 
@@ -1063,18 +1066,21 @@ test "ezex" {
                         core.setSlice(.{ .port = 0x4800 }, input[0..8]);
                         core.setSlice(.{ .port = 0x0020 }, input[8..14]);
                         core.setSlice(.{ .port = 0x201E }, input[14..16]);
-                        core.cpu.setShadow(.adl, @truncate(u1, input[16] >> 0));
-                        core.cpu.set(.adl, @truncate(u1, input[16] >> 1));
+                        core.cpu.setShadow(.adl, util.bit.extract(input[16], u1, 0));
+                        core.cpu.set(.adl, util.bit.extract(input[16], u1, 1));
                         core.set(
                             .{ .port = 0x4900 },
-                            if (input[16] >> 2 & 1 != 0) switch (@truncate(u2, input[16] >> 3)) {
-                                0 => 0o100,
-                                1 => 0o111,
-                                2 => 0o122,
-                                3 => 0o133,
-                            } else 0o000,
+                            if (util.bit.extract(input[16], u1, 2) != 0)
+                                switch (util.bit.extract(input[16], u2, 3)) {
+                                    0 => 0o100,
+                                    1 => 0o111,
+                                    2 => 0o122,
+                                    3 => 0o133,
+                                }
+                            else
+                                0o000,
                         );
-                        core.cpu.set(.ief, @truncate(u1, input[16] >> 5));
+                        core.cpu.set(.ief, util.bit.extract(input[16], u1, 5));
                         core.setSlice(.{ .port = 0x4901 }, input[17..22]);
                         core.setSlice(.{ .port = 0x4906 }, &[_]u8{0} ** (0x4917 - 0x4906 + 1));
                         core.cpu.set(.ui, std.mem.readIntLittle(u16, input[22..24]));
@@ -1158,9 +1164,10 @@ test "ezex" {
                         std.mem.writeIntLittle(
                             u32,
                             output[57..61],
-                            (@as(u32, core.cpu.get(.pc) +% 0x10) << 8 |
-                                util.toBacking(core.cpu.mode)) <<
-                                if (core.cpu.mode.adl == .z80) 8 else 0,
+                            util.bit.concat(.{
+                                @as(u24, core.cpu.get(.pc) +% 0x10),
+                                @as(u8, util.toBacking(core.cpu.mode)),
+                            }) << if (core.cpu.mode.adl == .z80) 8 else 0,
                         );
                         std.mem.writeIntLittle(u24, output[61..64], core.cpu.get(.spl));
 

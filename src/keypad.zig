@@ -1,7 +1,7 @@
 const std = @import("std");
 
-const util = @import("util.zig");
 const Keypad = @This();
+const util = @import("util.zig");
 
 pub const Key = packed struct(u8) {
     column: u4,
@@ -19,7 +19,7 @@ pub fn deinit(self: *Keypad) void {
 }
 
 pub fn getKey(self: *const Keypad, key: Key) u1 {
-    return @truncate(u1, self.keys[key.row] >> key.column);
+    return util.bit.extract(self.keys[key.row], u1, key.column);
 }
 pub fn setKey(self: *Keypad, key: Key, value: u1) void {
     _ = self.events[key.row][value].fetchOr(@as(u16, 1) << key.column, .SeqCst);
