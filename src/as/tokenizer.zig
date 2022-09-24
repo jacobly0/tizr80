@@ -273,10 +273,10 @@ pub fn next(self: *Tokenizer) Error!Token {
                     else => false,
                 }) index += 1;
                 const id = source[start..index];
-                inline for (@typeInfo(Keyword).Enum.fields) |field|
+                return inline for (@typeInfo(Keyword).Enum.fields) |field| {
                     if (std.ascii.eqlIgnoreCase(field.name, id))
-                        return .{ .keyword = @field(Keyword, field.name) };
-                return .{ .id = id };
+                        break .{ .keyword = @field(Keyword, field.name) };
+                } else .{ .id = id };
             },
             '\\' => return .backslash,
             else => return Error.UnexpectedCharacter,

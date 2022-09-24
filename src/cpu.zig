@@ -50,7 +50,7 @@ pub const RegisterId = enum {
     iyu,
     i,
     r,
-    mb,
+    mbase,
 
     // 16-bit registers
     af,
@@ -69,7 +69,7 @@ pub const RegisterId = enum {
     uix,
     uiy,
     spl,
-    mbi,
+    mbaseui,
     pc,
 };
 
@@ -80,344 +80,248 @@ pub const Mode = packed struct(u2) {
     madl: Adl,
 };
 
-pub const Flag = bool;
-
 pub const Flags = packed struct(u8) {
-    cf: Flag,
-    nf: Flag,
-    pv: Flag,
-    xf: Flag,
-    hc: Flag,
-    yf: Flag,
-    zf: Flag,
-    sf: Flag,
+    cf: bool,
+    nf: bool,
+    pv: bool,
+    xf: bool,
+    hc: bool,
+    yf: bool,
+    zf: bool,
+    sf: bool,
+
+    pub fn getCpu(cpu: *const Cpu) Flags {
+        return .{
+            .cf = cpu.cf,
+            .nf = cpu.nf,
+            .pv = cpu.pv,
+            .xf = cpu.xf,
+            .hc = cpu.hc,
+            .yf = cpu.yf,
+            .zf = cpu.zf,
+            .sf = cpu.sf,
+        };
+    }
+    pub fn setCpu(self: Flags, cpu: *Cpu) void {
+        cpu.cf = self.cf;
+        cpu.nf = self.nf;
+        cpu.pv = self.pv;
+        cpu.xf = self.xf;
+        cpu.hc = self.hc;
+        cpu.yf = self.yf;
+        cpu.zf = self.zf;
+        cpu.sf = self.sf;
+    }
 };
-
-pub const Word = packed union {
-    byte: packed struct(u16) { low: u8, high: u8 },
-    word: u16,
-};
-
-pub const Long = packed union {
-    byte: packed struct(u24) { low: u8, high: u8, upper: u8 },
-    word: Word,
-    ext: packed struct(u24) { word: u16, upper: u8 },
-    long: u24,
-};
-
-cf: Flag = false,
-nf: Flag = false,
-pv: Flag = false,
-xf: Flag = false,
-hc: Flag = false,
-yf: Flag = false,
-zf: Flag = false,
-sf: Flag = false,
-
-a: u8 = 0,
-bc: Long = .{ .long = 0 },
-de: Long = .{ .long = 0 },
-hl: Long = .{ .long = 0 },
-
-@"af'": packed union {
-    flags: Flags,
-    word: Word,
-} = .{ .word = .{ .word = 0 } },
-@"bc'": Long = .{ .long = 0 },
-@"de'": Long = .{ .long = 0 },
-@"hl'": Long = .{ .long = 0 },
-
-ix: Long = .{ .long = 0 },
-iy: Long = .{ .long = 0 },
-
-sps: Word = .{ .word = 0 },
-spl: Long = .{ .long = 0 },
-epc: Long = .{ .long = 0 },
-pc: Long = .{ .long = 0 },
-r: u8 = 0,
-mbi: Long = .{ .long = 0 },
 
 mode: Mode = .{ .adl = .z80, .madl = .z80 },
 
-ief1: Flag = false,
-ief2: Flag = false,
+cf: bool = false,
+nf: bool = false,
+pv: bool = false,
+xf: bool = false,
+hc: bool = false,
+yf: bool = false,
+zf: bool = false,
+sf: bool = false,
+
+a: u8 = 0,
+r: u8 = 0,
+
+bc: u32 = 0,
+de: u32 = 0,
+hl: u32 = 0,
+
+@"af'": u32 = 0,
+@"bc'": u32 = 0,
+@"de'": u32 = 0,
+@"hl'": u32 = 0,
+
+ix: u32 = 0,
+iy: u32 = 0,
+
+sps: u32 = 0,
+spl: u32 = 0,
+epc: u32 = 0,
+pc: u32 = 0,
+mbi: u32 = 0,
 
 im: u2 = 1,
+ief1: bool = false,
+ief2: bool = false,
 
 cycles: u64 = 0,
 
 backend: *Backend,
 
-pub fn getF(self: *const Cpu) u8 {
-    return util.toBacking(Flags{
-        .cf = self.cf,
-        .nf = self.nf,
-        .pv = self.pv,
-        .xf = self.xf,
-        .hc = self.hc,
-        .yf = self.yf,
-        .zf = self.zf,
-        .sf = self.sf,
-    });
-}
-pub fn setF(self: *Cpu, value: u8) void {
-    const flags = util.fromBacking(Flags, value);
-    self.cf = flags.cf;
-    self.nf = flags.nf;
-    self.pv = flags.pv;
-    self.xf = flags.xf;
-    self.hc = flags.hc;
-    self.yf = flags.yf;
-    self.zf = flags.zf;
-    self.sf = flags.sf;
-}
-
-pub fn getAF(self: *const Cpu) u16 {
-    return (Word{ .byte = .{ .low = self.getF(), .high = self.a } }).word;
-}
-pub fn setAF(self: *const Cpu, value: u16) void {
-    const word = Word{ .word = value };
-    self.setF(word.byte.low);
-    self.a = word.byte.high;
-}
-
-pub fn getR(self: *const Cpu) u8 {
-    return std.math.rotr(u8, self.r, 1);
-}
-pub fn setR(self: *Cpu, value: u8) void {
-    self.r = std.math.rotl(u8, value, 1);
-}
-pub fn addR(self: *Cpu, comptime offset: comptime_int) void {
-    self.r = @bitCast(u8, @bitCast(i8, self.r) +% (offset << 1));
-}
-
-pub fn get(self: *const Cpu, id: RegisterId) u24 {
+pub fn RegisterType(comptime id: RegisterId) type {
     return switch (id) {
-        // state
+        .adl, .ief, .cf, .nf, .pv, .xf, .hc, .yf, .zf, .sf => u1,
+        .im => u2,
+        .f, .a, .c, .b, .bcu, .e, .d, .deu, .l, .h, .hlu, .ixl, .ixh, .ixu, .iyl, .iyh, .iyu, .i, .r, .mbase => u8,
+        .af, .bc, .de, .hl, .ix, .iy, .sps, .ui => u16,
+        .ubc, .ude, .uhl, .uix, .uiy, .spl, .mbaseui, .pc => u24,
+    };
+}
+
+pub fn registerBitOffset(comptime id: RegisterId) comptime_int {
+    return switch (id) {
+        .adl, .ief, .im => 0,
+        .cf, .nf, .pv, .xf, .hc, .yf, .zf, .sf => @bitOffsetOf(Flags, @tagName(id)),
+        .f, .c, .e, .l, .ixl, .iyl, .r, .i => 0,
+        .a, .b, .d, .h, .ixh, .iyh => 8,
+        .bcu, .deu, .hlu, .ixu, .iyu, .mbase => 16,
+        .af, .bc, .de, .hl, .ix, .iy, .sps, .ui => 0,
+        .ubc, .ude, .uhl, .uix, .uiy, .spl, .mbaseui, .pc => 0,
+    };
+}
+
+pub fn get(self: *const Cpu, comptime id: RegisterId) RegisterType(id) {
+    return util.bit.extract(switch (id) {
         .adl => @enumToInt(self.mode.adl),
         .ief => @boolToInt(self.ief1),
         .im => self.im,
-
-        // 1-bit flags
-        .cf => @boolToInt(self.cf),
-        .nf => @boolToInt(self.nf),
-        .pv => @boolToInt(self.pv),
-        .xf => @boolToInt(self.xf),
-        .hc => @boolToInt(self.hc),
-        .yf => @boolToInt(self.yf),
-        .zf => @boolToInt(self.zf),
-        .sf => @boolToInt(self.sf),
-
-        // 8-bit registers
-        .f => self.getF(),
-        .a => self.a,
-        .c => self.bc.byte.low,
-        .b => self.bc.byte.high,
-        .bcu => self.bc.byte.upper,
-        .e => self.de.byte.low,
-        .d => self.de.byte.high,
-        .deu => self.de.byte.upper,
-        .l => self.hl.byte.low,
-        .h => self.hl.byte.high,
-        .hlu => self.hl.byte.upper,
-        .ixl => self.ix.byte.low,
-        .ixh => self.ix.byte.high,
-        .ixu => self.ix.byte.upper,
-        .iyl => self.iy.byte.low,
-        .iyh => self.iy.byte.high,
-        .iyu => self.iy.byte.upper,
-        .i => self.mbi.byte.low,
-        .r => self.getR(),
-        .mb => self.mbi.ext.upper,
-
-        // 16-bit registers
-        .af => (Word{ .byte = .{ .low = self.getF(), .high = self.a } }).word,
-        .bc => self.bc.word.word,
-        .de => self.de.word.word,
-        .hl => self.hl.word.word,
-        .ix => self.ix.word.word,
-        .iy => self.iy.word.word,
-        .sps => self.sps.word,
-        .ui => self.mbi.ext.word,
-
-        // 24-bit registers
-        .ubc => self.bc.long,
-        .ude => self.de.long,
-        .uhl => self.hl.long,
-        .uix => self.ix.long,
-        .uiy => self.iy.long,
-        .spl => self.spl.long,
-        .mbi => self.mbi.long,
-        .pc => self.epc.long,
-    };
+        .cf, .nf, .pv, .xf, .hc, .yf, .zf, .sf, .a, .f, .af => util.bit.concat(.{
+            self.a,
+            util.toBacking(Flags.getCpu(self)),
+        }),
+        .bcu, .b, .c, .bc, .ubc => self.bc,
+        .deu, .d, .e, .de, .ude => self.de,
+        .hlu, .h, .l, .hl, .uhl => self.hl,
+        .ixu, .ixh, .ixl, .ix, .uix => self.ix,
+        .iyu, .iyh, .iyl, .iy, .uiy => self.iy,
+        .mbase, .i, .ui, .mbaseui => self.mbi,
+        .r => std.math.rotr(u8, self.r, 1),
+        .sps => self.sps,
+        .spl => self.spl,
+        .pc => self.epc,
+    }, RegisterType(id), registerBitOffset(id));
+}
+pub fn getAny(self: *const Cpu, id: RegisterId) u24 {
+    return inline for (@typeInfo(RegisterId).Enum.fields) |field| {
+        const comptimeId = @field(RegisterId, field.name);
+        if (id == comptimeId) break self.get(comptimeId);
+    } else unreachable;
 }
 
-pub fn getShadow(self: *const Cpu, id: RegisterId) u24 {
-    return switch (id) {
-        // state
-        .adl => @enumToInt(self.mode.madl),
-        .ief => @boolToInt(self.ief2),
+pub fn getShadow(self: *const Cpu, comptime id: RegisterId) RegisterType(id) {
+    return util.bit.extract(switch (id) {
+        .adl => return @enumToInt(self.mode.madl),
+        .ief => return @boolToInt(self.ief2),
         .im => unreachable,
-
-        // 1-bit flags
-        .cf => @boolToInt(self.@"af'".flags.cf),
-        .nf => @boolToInt(self.@"af'".flags.nf),
-        .pv => @boolToInt(self.@"af'".flags.pv),
-        .xf => @boolToInt(self.@"af'".flags.xf),
-        .hc => @boolToInt(self.@"af'".flags.hc),
-        .yf => @boolToInt(self.@"af'".flags.yf),
-        .zf => @boolToInt(self.@"af'".flags.zf),
-        .sf => @boolToInt(self.@"af'".flags.sf),
-
-        // 8-bit registers
-        .f => self.@"af'".word.byte.low,
-        .a => self.@"af'".word.byte.high,
-        .c => self.@"bc'".byte.low,
-        .b => self.@"bc'".byte.high,
-        .bcu => self.@"bc'".byte.upper,
-        .e => self.@"de'".byte.low,
-        .d => self.@"de'".byte.high,
-        .deu => self.@"de'".byte.upper,
-        .l => self.@"hl'".byte.low,
-        .h => self.@"hl'".byte.high,
-        .hlu => self.@"hl'".byte.upper,
-        .ixl, .ixh, .ixu, .iyu, .iyl, .iyh, .i, .r, .mb => unreachable,
-
-        // 16-bit registers
-        .af => self.@"af'".word.word,
-        .bc => self.@"bc'".word.word,
-        .de => self.@"de'".word.word,
-        .hl => self.@"hl'".word.word,
+        .cf, .nf, .pv, .xf, .hc, .yf, .zf, .sf, .a, .f, .af => self.@"af'",
+        .bcu, .b, .c, .bc, .ubc => self.@"bc'",
+        .deu, .d, .e, .de, .ude => self.@"de'",
+        .hlu, .h, .l, .hl, .uhl => self.@"hl'",
+        .ixl, .ixh, .ixu, .iyu, .iyl, .iyh, .i, .r, .mbase => unreachable,
         .ix, .iy, .sps, .ui => unreachable,
-
-        // 24-bit registers
-        .ubc => self.@"bc'".long,
-        .ude => self.@"de'".long,
-        .uhl => self.@"hl'".long,
-        .uix, .uiy, .spl, .mbi => unreachable,
-        .pc => self.pc.long,
-    };
+        .uix, .uiy, .spl, .mbaseui => unreachable,
+        .pc => self.pc,
+    }, RegisterType(id), registerBitOffset(id));
+}
+pub fn getAnyShadow(self: *const Cpu, id: RegisterId) u24 {
+    return inline for (@typeInfo(RegisterId).Enum.fields) |field| {
+        const comptimeId = @field(RegisterId, field.name);
+        if (id == comptimeId) break self.getShadow(comptimeId);
+    } else unreachable;
 }
 
-pub fn set(self: *Cpu, id: RegisterId, value: u24) void {
-    switch (id) {
-        // state
-        .adl => self.mode.adl = @intToEnum(Adl, value),
+pub fn set(self: *Cpu, comptime id: RegisterId, value: RegisterType(id)) void {
+    util.bit.insert(&switch (id) {
+        .adl => {
+            self.mode.adl = @intToEnum(Adl, value);
+            return;
+        },
         .ief => {
-            self.ief1 = @intCast(u1, value) != 0;
-            self.setShadow(.ief, value);
+            self.ief1 = value != 0;
+            self.setShadow(id, value);
+            return;
         },
         .im => {
-            std.debug.assert(value < 2);
-            self.im = @intCast(u2, value);
+            std.debug.assert(value <= 2);
+            self.im = value;
+            return;
         },
-
-        // 1-bit flags
-        .cf => self.cf = @intCast(u1, value) != 0,
-        .nf => self.nf = @intCast(u1, value) != 0,
-        .pv => self.pv = @intCast(u1, value) != 0,
-        .xf => self.xf = @intCast(u1, value) != 0,
-        .hc => self.hc = @intCast(u1, value) != 0,
-        .yf => self.yf = @intCast(u1, value) != 0,
-        .zf => self.zf = @intCast(u1, value) != 0,
-        .sf => self.sf = @intCast(u1, value) != 0,
-
-        // 8-bit registers
-        .f => self.setF(@intCast(u8, value)),
-        .a => self.a = @intCast(u8, value),
-        .c => self.bc.byte.low = @intCast(u8, value),
-        .b => self.bc.byte.high = @intCast(u8, value),
-        .bcu => self.bc.byte.upper = @intCast(u8, value),
-        .e => self.de.byte.low = @intCast(u8, value),
-        .d => self.de.byte.high = @intCast(u8, value),
-        .deu => self.de.byte.upper = @intCast(u8, value),
-        .l => self.hl.byte.low = @intCast(u8, value),
-        .h => self.hl.byte.high = @intCast(u8, value),
-        .hlu => self.hl.byte.upper = @intCast(u8, value),
-
-        .ixl => self.ix.byte.low = @intCast(u8, value),
-        .ixh => self.ix.byte.high = @intCast(u8, value),
-        .ixu => self.ix.byte.upper = @intCast(u8, value),
-        .iyl => self.iy.byte.low = @intCast(u8, value),
-        .iyh => self.iy.byte.high = @intCast(u8, value),
-        .iyu => self.iy.byte.upper = @intCast(u8, value),
-        .i => self.mbi.byte.low = @intCast(u8, value),
-        .r => self.setR(@intCast(u8, value)),
-        .mb => self.mbi.ext.upper = @intCast(u8, value),
-
-        // 16-bit registers
+        .cf, .nf, .pv, .xf, .hc, .yf, .zf, .sf => {
+            @field(self, @tagName(id)) = value != 0;
+            return;
+        },
+        .f => {
+            util.fromBacking(Flags, value).setCpu(self);
+            return;
+        },
+        .a => {
+            self.a = value;
+            return;
+        },
         .af => {
-            const word = Word{ .word = @intCast(u16, value) };
-            self.setF(word.byte.low);
-            self.a = word.byte.high;
+            self.set(.f, util.bit.extract(value, u8, 0));
+            self.set(.a, util.bit.extract(value, u8, 8));
+            return;
         },
-        .bc => self.bc.word.word = @intCast(u16, value),
-        .de => self.de.word.word = @intCast(u16, value),
-        .hl => self.hl.word.word = @intCast(u16, value),
-        .ix => self.ix.word.word = @intCast(u16, value),
-        .iy => self.iy.word.word = @intCast(u16, value),
-        .sps => self.sps.word = @intCast(u16, value),
-        .ui => self.mbi.ext.word = @intCast(u16, value),
-
-        // 24-bit registers
-        .ubc => self.bc.long = value,
-        .ude => self.de.long = value,
-        .uhl => self.hl.long = value,
-        .uix => self.ix.long = value,
-        .uiy => self.iy.long = value,
-        .spl => self.spl.long = value,
-        .mbi => self.mbi.long = value,
-        .pc => {
-            self.epc.long = value;
+        .bcu, .b, .c, .bc, .ubc => self.bc,
+        .deu, .d, .e, .de, .ude => self.de,
+        .hlu, .h, .l, .hl, .uhl => self.hl,
+        .ixu, .ixh, .ixl, .ix, .uix => self.ix,
+        .iyu, .iyh, .iyl, .iy, .uiy => self.iy,
+        .mbase, .i, .ui, .mbaseui => self.mbi,
+        .r => {
+            self.r = std.math.rotl(u8, value, 1);
+            return;
+        },
+        .sps => self.sps,
+        .spl => self.spl,
+        .pc => field: {
             self.backend.flush = true;
+            break :field self.epc;
         },
-    }
+    }, value, registerBitOffset(id));
+}
+pub fn setAny(self: *Cpu, id: RegisterId, value: u24) void {
+    inline for (@typeInfo(RegisterId).Enum.fields) |field| {
+        const comptimeId = @field(RegisterId, field.name);
+        if (id == comptimeId)
+            break self.set(comptimeId, @intCast(RegisterType(comptimeId), value));
+    } else unreachable;
 }
 
-pub fn setShadow(self: *Cpu, id: RegisterId, value: u24) void {
-    switch (id) {
-        // state
-        .adl => self.mode.madl = @intToEnum(Adl, value),
-        .ief => self.ief2 = @intCast(u1, value) != 0,
+pub fn setShadow(self: *Cpu, comptime id: RegisterId, value: RegisterType(id)) void {
+    util.bit.insert(&switch (id) {
+        .adl => {
+            self.mode.madl = @intToEnum(Adl, value);
+            return;
+        },
+        .ief => {
+            self.ief2 = @intCast(u1, value) != 0;
+            return;
+        },
         .im => unreachable,
-
-        // 1-bit flags
-        .cf => self.@"af'".flags.cf = @intCast(u1, value) != 0,
-        .nf => self.@"af'".flags.nf = @intCast(u1, value) != 0,
-        .pv => self.@"af'".flags.pv = @intCast(u1, value) != 0,
-        .xf => self.@"af'".flags.xf = @intCast(u1, value) != 0,
-        .hc => self.@"af'".flags.hc = @intCast(u1, value) != 0,
-        .yf => self.@"af'".flags.yf = @intCast(u1, value) != 0,
-        .zf => self.@"af'".flags.zf = @intCast(u1, value) != 0,
-        .sf => self.@"af'".flags.sf = @intCast(u1, value) != 0,
-
-        // 8-bit registers
-        .f => self.@"af'".word.byte.low = @intCast(u8, value),
-        .a => self.@"af'".word.byte.high = @intCast(u8, value),
-        .c => self.@"bc'".byte.low = @intCast(u8, value),
-        .b => self.@"bc'".byte.high = @intCast(u8, value),
-        .bcu => self.@"bc'".byte.upper = @intCast(u8, value),
-        .e => self.@"de'".byte.low = @intCast(u8, value),
-        .d => self.@"de'".byte.high = @intCast(u8, value),
-        .deu => self.@"de'".byte.upper = @intCast(u8, value),
-        .l => self.@"de'".byte.low = @intCast(u8, value),
-        .h => self.@"de'".byte.high = @intCast(u8, value),
-        .hlu => self.@"hl'".byte.upper = @intCast(u8, value),
-        .ixl, .ixh, .ixu, .iyu, .iyl, .iyh, .i, .r, .mb => unreachable,
-
-        // 16-bit registers
-        .af => self.@"af'".word.word = @intCast(u16, value),
-        .bc => self.@"bc'".word.word = @intCast(u16, value),
-        .de => self.@"de'".word.word = @intCast(u16, value),
-        .hl => self.@"hl'".word.word = @intCast(u16, value),
+        .cf, .nf, .pv, .xf, .hc, .yf, .zf, .sf, .a, .f, .af => self.@"af'",
+        .bcu, .b, .c, .bc, .ubc => self.@"bc'",
+        .deu, .d, .e, .de, .ude => self.@"de'",
+        .hlu, .h, .l, .hl, .uhl => self.@"hl'",
+        .ixl, .ixh, .ixu, .iyu, .iyl, .iyh, .i, .r, .mbase => unreachable,
         .ix, .iy, .sps, .ui => unreachable,
+        .uix, .uiy, .spl, .mbaseui => unreachable,
+        .pc => self.pc,
+    }, value, registerBitOffset(id));
+}
+pub fn setAnyShadow(self: *Cpu, id: RegisterId, value: u24) void {
+    inline for (@typeInfo(RegisterId).Enum.fields) |field| {
+        const comptimeId = @field(RegisterId, field.name);
+        if (id == comptimeId)
+            break self.setShadow(comptimeId, @intCast(RegisterType(comptimeId), value));
+    } else unreachable;
+}
 
-        // 24-bit registers
-        .ubc => self.@"bc'".long = value,
-        .ude => self.@"de'".long = value,
-        .uhl => self.@"hl'".long = value,
-        .uix, .uiy, .spl, .mbi => unreachable,
-        .pc => self.pc.long = value,
+pub fn add(self: *Cpu, comptime id: RegisterId, comptime offset: comptime_int) void {
+    const increment = @bitCast(
+        RegisterType(id),
+        @as(std.meta.Int(.signed, @typeInfo(RegisterType(id)).Int.bits), offset),
+    );
+    switch (id) {
+        .r => self.r +%= increment << 1,
+        else => self.set(id, self.get(id) +% increment),
     }
 }
 
@@ -482,7 +386,7 @@ test "registers" {
     cpu.set(.pc, 0xAF16B2);
     cpu.set(.ui, 0x7C38);
     cpu.set(.r, 0xD4);
-    cpu.set(.mb, 0x9E);
+    cpu.set(.mbase, 0x9E);
 
     try std.testing.expectEqual(@as(u1, 1), @intCast(u1, cpu.get(.cf)));
     try std.testing.expectEqual(@as(u1, 1), @intCast(u1, cpu.get(.nf)));
@@ -520,7 +424,7 @@ test "registers" {
     try std.testing.expectEqual(@as(u8, 0x15), @intCast(u8, cpu.get(.iyh)));
     try std.testing.expectEqual(@as(u8, 0x8C), @intCast(u8, cpu.get(.iyu)));
     try std.testing.expectEqual(@as(u8, 0xD4), @intCast(u8, cpu.get(.r)));
-    try std.testing.expectEqual(@as(u8, 0x9E), @intCast(u8, cpu.get(.mb)));
+    try std.testing.expectEqual(@as(u8, 0x9E), @intCast(u8, cpu.get(.mbase)));
 
     try std.testing.expectEqual(@as(u8, 0x13), @intCast(u8, cpu.getShadow(.f)));
     try std.testing.expectEqual(@as(u8, 0xCE), @intCast(u8, cpu.getShadow(.a)));

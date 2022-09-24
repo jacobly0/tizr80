@@ -123,7 +123,7 @@ pub const cemucore_reg = enum(c_int) {
     CEMUCORE_FLAG_N,
     CEMUCORE_FLAG_PV,
     CEMUCORE_FLAG_X,
-    CEMUCORE_FLAG_HC,
+    CEMUCORE_FLAG_H,
     CEMUCORE_FLAG_Y,
     CEMUCORE_FLAG_Z,
     CEMUCORE_FLAG_S,
@@ -148,7 +148,7 @@ pub const cemucore_reg = enum(c_int) {
     CEMUCORE_REG_IYU,
     CEMUCORE_REG_I,
     CEMUCORE_REG_R,
-    CEMUCORE_REG_MB,
+    CEMUCORE_REG_MBASE,
 
     // 16-bit registers
     CEMUCORE_REG_AF,
@@ -167,6 +167,7 @@ pub const cemucore_reg = enum(c_int) {
     CEMUCORE_REG_UIX,
     CEMUCORE_REG_UIY,
     CEMUCORE_REG_SPL,
+    CEMUCORE_REG_MBASEUI,
     CEMUCORE_REG_PC,
 
     pub fn unwrap(self: cemucore_reg) Cpu.RegisterId {
@@ -178,7 +179,7 @@ pub const cemucore_reg = enum(c_int) {
             .CEMUCORE_FLAG_N => .nf,
             .CEMUCORE_FLAG_PV => .pv,
             .CEMUCORE_FLAG_X => .xf,
-            .CEMUCORE_FLAG_HC => .hc,
+            .CEMUCORE_FLAG_H => .hc,
             .CEMUCORE_FLAG_Y => .yf,
             .CEMUCORE_FLAG_Z => .zf,
             .CEMUCORE_FLAG_S => .sf,
@@ -201,7 +202,7 @@ pub const cemucore_reg = enum(c_int) {
             .CEMUCORE_REG_IYU => .iyu,
             .CEMUCORE_REG_I => .i,
             .CEMUCORE_REG_R => .r,
-            .CEMUCORE_REG_MB => .mb,
+            .CEMUCORE_REG_MBASE => .mbase,
             .CEMUCORE_REG_AF => .af,
             .CEMUCORE_REG_BC => .bc,
             .CEMUCORE_REG_DE => .de,
@@ -216,6 +217,7 @@ pub const cemucore_reg = enum(c_int) {
             .CEMUCORE_REG_UIX => .uix,
             .CEMUCORE_REG_UIY => .uiy,
             .CEMUCORE_REG_SPL => .spl,
+            .CEMUCORE_REG_MBASEUI => .mbaseui,
             .CEMUCORE_REG_PC => .pc,
         };
     }

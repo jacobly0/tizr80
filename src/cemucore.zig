@@ -166,8 +166,8 @@ fn IntTypeForBuffer(buffer: []const u8) type {
 
 fn getRaw(self: *CEmuCore, key: Property.Key) ?u24 {
     return switch (key) {
-        .register => |id| self.cpu.get(id),
-        .shadow_register => |id| self.cpu.getShadow(id),
+        .register => |id| self.cpu.getAny(id),
+        .shadow_register => |id| self.cpu.getAnyShadow(id),
         .key => |key| self.keypad.getKey(key),
         .flash => |address| self.mem.peek(address),
         .ram => |address| self.mem.peek(Memory.ram_start + @as(u24, address)),
@@ -211,8 +211,8 @@ pub fn getSlice(self: *CEmuCore, key: Property.Key, buffer: []u8) void {
 }
 fn setRaw(self: *CEmuCore, key: Property.Key, value: ?u24) void {
     switch (key) {
-        .register => |id| self.cpu.set(id, value.?),
-        .shadow_register => |id| self.cpu.setShadow(id, value.?),
+        .register => |id| self.cpu.setAny(id, value.?),
+        .shadow_register => |id| self.cpu.setAnyShadow(id, value.?),
         .key => |key| self.keypad.setKey(key, @intCast(u1, value.?)),
         .ram => |address| self.mem.poke(Memory.ram_start + @as(u24, address), @intCast(u8, value.?)),
         .port => |address| self.ports.poke(address, @intCast(u8, value.?)),
@@ -245,11 +245,10 @@ pub fn setSlice(self: *CEmuCore, key: Property.Key, buffer: []const u8) void {
             self.setRaw(.{ .port = address + @intCast(u16, offset) }, value);
         },
         else => {
-            const value = inline for (.{ 3, 2, 1, 0 }) |len| {
+            self.setRaw(key, inline for (.{ 3, 2, 1, 0 }) |len| {
                 if (len <= buffer.len)
                     break std.mem.readIntSliceLittle(std.meta.Int(.unsigned, len * 8), buffer);
-            };
-            self.setRaw(key, value);
+            });
         },
     }
 }

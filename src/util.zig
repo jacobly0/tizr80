@@ -13,16 +13,13 @@ pub fn toBacking(value: anytype) Backing(@TypeOf(value)) {
     return @bitCast(Backing(@TypeOf(value)), value);
 }
 pub const bit = struct {
-    fn check(
-        comptime Value: type,
-        comptime Field: type,
-        bit_offset: std.math.Log2Int(Value),
-    ) void {
+    fn check(comptime Value: type, comptime Field: type, bit_offset: std.math.Log2Int(Value)) void {
         const value_info = @typeInfo(Value).Int;
         const field_info = @typeInfo(Field).Int;
         std.debug.assert(value_info.signedness == .unsigned);
         std.debug.assert(field_info.signedness == .unsigned);
-        std.debug.assert(@as(std.math.Log2IntCeil(Value), bit_offset) + field_info.bits <= value_info.bits);
+        std.debug.assert(@as(std.math.Log2IntCeil(Value), bit_offset) +
+            field_info.bits <= value_info.bits);
     }
 
     pub fn extract(
@@ -34,7 +31,7 @@ pub const bit = struct {
         return @truncate(Field, value >> bit_offset);
     }
 
-    pub fn insert(
+    pub fn inserted(
         value: anytype,
         field: anytype,
         bit_offset: std.math.Log2Int(@TypeOf(value)),
@@ -44,6 +41,10 @@ pub const bit = struct {
         check(Value, Field, bit_offset);
         return value & ~(@as(Value, std.math.maxInt(Field)) << bit_offset) |
             @as(Value, field) << bit_offset;
+    }
+
+    pub fn insert(value: anytype, field: anytype, bit_offset: std.math.Log2Int(@TypeOf(value.*))) void {
+        value.* = inserted(value.*, field, bit_offset);
     }
 
     fn Concat(comptime Tuple: type) type {
@@ -59,7 +60,7 @@ pub const bit = struct {
         comptime var bit_offset = @bitSizeOf(Result);
         inline for (tuple) |field| {
             bit_offset -= @bitSizeOf(@TypeOf(field));
-            result = insert(result, field, bit_offset);
+            insert(&result, field, bit_offset);
         }
         return result;
     }
@@ -69,7 +70,7 @@ test "bit" {
     try std.testing.expectEqual(@as(u12, 0x123), bit.extract(@as(u24, 0xAB123C), u12, 4));
     try std.testing.expectEqual(
         @as(u24, 0xAB987C),
-        bit.insert(@as(u24, 0xAB123C), @as(u12, 0x987), 4),
+        bit.inserted(@as(u24, 0xAB123C), @as(u12, 0x987), 4),
     );
     try std.testing.expectEqual(
         @as(u15, 0b101_11101_1_0010_11),

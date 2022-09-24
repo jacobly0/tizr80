@@ -35,13 +35,13 @@ static void test_cpu_registers(cemucore_t *core) {
     cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_PC, 0xAF16B2);
     cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_UI, 0x7C38);
     cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_R, 0xD4);
-    cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_MB, 0x9E);
+    cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_MBASE, 0x9E);
 
     expect(1 == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_FLAG_C));
     expect(1 == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_FLAG_N));
     expect(0 == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_FLAG_PV));
     expect(0 == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_FLAG_X));
-    expect(0 == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_FLAG_HC));
+    expect(0 == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_FLAG_H));
     expect(1 == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_FLAG_Y));
     expect(0 == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_FLAG_Z));
     expect(0 == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_FLAG_S));
@@ -50,7 +50,7 @@ static void test_cpu_registers(cemucore_t *core) {
     expect(1 == cemucore_get(core, CEMUCORE_PROP_REG_SHADOW, CEMUCORE_FLAG_N));
     expect(0 == cemucore_get(core, CEMUCORE_PROP_REG_SHADOW, CEMUCORE_FLAG_PV));
     expect(0 == cemucore_get(core, CEMUCORE_PROP_REG_SHADOW, CEMUCORE_FLAG_X));
-    expect(1 == cemucore_get(core, CEMUCORE_PROP_REG_SHADOW, CEMUCORE_FLAG_HC));
+    expect(1 == cemucore_get(core, CEMUCORE_PROP_REG_SHADOW, CEMUCORE_FLAG_H));
     expect(0 == cemucore_get(core, CEMUCORE_PROP_REG_SHADOW, CEMUCORE_FLAG_Y));
     expect(0 == cemucore_get(core, CEMUCORE_PROP_REG_SHADOW, CEMUCORE_FLAG_Z));
     expect(0 == cemucore_get(core, CEMUCORE_PROP_REG_SHADOW, CEMUCORE_FLAG_S));
@@ -73,7 +73,7 @@ static void test_cpu_registers(cemucore_t *core) {
     expect(UINT8_C(0x15) == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_REG_IYH));
     expect(UINT8_C(0x8C) == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_REG_IYU));
     expect(UINT8_C(0xD4) == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_REG_R));
-    expect(UINT8_C(0x9E) == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_REG_MB));
+    expect(UINT8_C(0x9E) == cemucore_get(core, CEMUCORE_PROP_REG, CEMUCORE_REG_MBASE));
 
     expect(UINT8_C(0x13) == cemucore_get(core, CEMUCORE_PROP_REG_SHADOW, CEMUCORE_REG_F));
     expect(UINT8_C(0xCE) == cemucore_get(core, CEMUCORE_PROP_REG_SHADOW, CEMUCORE_REG_A));
@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
     for (uint32_t address = 0; address != sizeof(program); ++address)
         cemucore_set(core, CEMUCORE_PROP_RAM, address, program[address]);
     cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_PC, 0);
-    cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_MB, 0xD0);
+    cemucore_set(core, CEMUCORE_PROP_REG, CEMUCORE_REG_MBASE, 0xD0);
 
     expect(!cemucore_sleep(core));
     expect(cemucore_wake(core));

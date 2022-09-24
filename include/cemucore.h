@@ -81,7 +81,7 @@ typedef enum cemucore_reg {
     CEMUCORE_FLAG_N,
     CEMUCORE_FLAG_PV,
     CEMUCORE_FLAG_X,
-    CEMUCORE_FLAG_HC,
+    CEMUCORE_FLAG_H,
     CEMUCORE_FLAG_Y,
     CEMUCORE_FLAG_Z,
     CEMUCORE_FLAG_S,
@@ -106,7 +106,7 @@ typedef enum cemucore_reg {
     CEMUCORE_REG_IYU,
     CEMUCORE_REG_I,
     CEMUCORE_REG_R,
-    CEMUCORE_REG_MB,
+    CEMUCORE_REG_MBASE,
 
     /* 16-bit registers */
     CEMUCORE_REG_AF,
@@ -125,6 +125,7 @@ typedef enum cemucore_reg {
     CEMUCORE_REG_UIX,
     CEMUCORE_REG_UIY,
     CEMUCORE_REG_SPL,
+    CEMUCORE_REG_MBASEUI,
     CEMUCORE_REG_PC,
 } cemucore_reg_t;
 
