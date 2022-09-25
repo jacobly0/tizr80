@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const CEmuCore = @import("cemucore.zig");
 const Dummy = @import("ports/dummy.zig");
 const Lcd = @import("ports/lcd.zig");
 const Port0 = @import("ports/port0.zig");

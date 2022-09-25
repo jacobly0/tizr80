@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const CEmuCore = @import("../cemucore.zig");
 const Cpu = @import("../cpu.zig");
 
 pub const Mode = struct {

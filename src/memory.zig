@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const CEmuCore = @import("cemucore.zig");
+const TiZr80 = @import("tizr80.zig");
 const Memory = @This();
 const Ports = @import("ports.zig");
 const util = @import("util.zig");
@@ -26,7 +26,7 @@ pub fn deinit(self: *Memory, allocator: std.mem.Allocator) void {
 }
 
 fn ports(self: *Memory) *Ports {
-    return &@fieldParentPtr(CEmuCore, "mem", self).ports;
+    return &@fieldParentPtr(TiZr80, "mem", self).ports;
 }
 fn mmio(address: u24, cycles: *u64) ?u16 {
     return util.bit.concat(.{ @intCast(u4, switch (util.bit.extract(address, u8, 16)) {

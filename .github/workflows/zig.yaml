@@ -48,7 +48,7 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v3.1.0
         with:
-          name: CEmuCore-${{runner.os}}-${{matrix.build-mode}}
+          name: TiZr80-${{runner.os}}-${{matrix.build-mode}}
           path: zig-out
 
       - name: Test

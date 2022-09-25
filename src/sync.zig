@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const CEmuCore = @import("cemucore.zig");
 const Sync = @This();
 const util = @import("util.zig");
 

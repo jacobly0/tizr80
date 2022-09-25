@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const CEmuCore = @import("cemucore.zig");
+const TiZr80 = @import("tizr80.zig");
 const Cpu = @This();
 const decode = @import("cpu/decode.zig");
 const Dummy = @import("cpu/dummy.zig");
@@ -335,8 +335,8 @@ pub fn deinit(self: *Cpu, allocator: std.mem.Allocator) void {
     self.* = undefined;
 }
 
-fn core(self: *Cpu) *CEmuCore {
-    return @fieldParentPtr(CEmuCore, "cpu", self);
+fn core(self: *Cpu) *TiZr80 {
+    return @fieldParentPtr(TiZr80, "cpu", self);
 }
 
 pub fn read(self: *Cpu, address: u24) u8 {

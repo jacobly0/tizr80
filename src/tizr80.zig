@@ -94,12 +94,12 @@ pub const Transfer = enum {
     @"error",
 };
 
-pub const SignalHandler = ?*const fn (*CEmuCore, Signal) void;
+pub const SignalHandler = ?*const fn (*TiZr80, Signal) void;
 
-const CEmuCore = @This();
+const TiZr80 = @This();
 
 allocator: std.mem.Allocator,
-signal_handler: ?*const fn (*CEmuCore, Signal) void,
+signal_handler: ?*const fn (*TiZr80, Signal) void,
 sync: ?Sync = undefined,
 mem: Memory = undefined,
 ports: Ports = undefined,
@@ -107,16 +107,16 @@ cpu: Cpu = undefined,
 keypad: Keypad = undefined,
 thread: ?std.Thread = null,
 
-pub fn create(create_options: CreateOptions) !*CEmuCore {
-    const self = try create_options.allocator.create(CEmuCore);
+pub fn create(create_options: CreateOptions) !*TiZr80 {
+    const self = try create_options.allocator.create(TiZr80);
     errdefer create_options.allocator.destroy(self);
 
     try self.init(create_options);
     return self;
 }
-pub fn init(self: *CEmuCore, create_options: CreateOptions) !void {
+pub fn init(self: *TiZr80, create_options: CreateOptions) !void {
     errdefer self.deinit();
-    self.* = CEmuCore{
+    self.* = TiZr80{
         .allocator = create_options.allocator,
         .signal_handler = create_options.signal_handler,
     };
@@ -137,14 +137,14 @@ pub fn init(self: *CEmuCore, create_options: CreateOptions) !void {
             runLoop,
             .{self},
         );
-        const name = "cemucore";
+        const name = "TiZr80";
         thread.setName(name[0..std.math.min(name.len, std.Thread.max_name_len)]) catch {};
         self.thread = thread;
         sync.start();
     }
 }
 
-pub fn deinit(self: *CEmuCore) void {
+pub fn deinit(self: *TiZr80) void {
     if (self.sync) |*sync| sync.stop();
     if (self.thread) |thread| thread.join();
     self.keypad.deinit();
@@ -154,7 +154,7 @@ pub fn deinit(self: *CEmuCore) void {
     if (self.sync) |*sync| sync.deinit();
     self.* = undefined;
 }
-pub fn destroy(self: *CEmuCore) void {
+pub fn destroy(self: *TiZr80) void {
     const allocator = self.allocator;
     self.deinit();
     allocator.destroy(self);
@@ -164,7 +164,7 @@ fn IntTypeForBuffer(buffer: []const u8) type {
     return std.meta.Int(.unsigned, std.math.min(buffer.len, 3) * 8);
 }
 
-fn getRaw(self: *CEmuCore, key: Property.Key) ?u24 {
+fn getRaw(self: *TiZr80, key: Property.Key) ?u24 {
     return switch (key) {
         .register => |id| self.cpu.getAny(id),
         .shadow_register => |id| self.cpu.getAnyShadow(id),
@@ -175,7 +175,7 @@ fn getRaw(self: *CEmuCore, key: Property.Key) ?u24 {
         else => std.debug.todo("unimplemented"),
     };
 }
-pub fn get(self: *CEmuCore, key: Property.Key) ?u24 {
+pub fn get(self: *TiZr80, key: Property.Key) ?u24 {
     const needs_sync = switch (key) {
         else => true,
     };
@@ -184,7 +184,7 @@ pub fn get(self: *CEmuCore, key: Property.Key) ?u24 {
 
     return self.getRaw(key);
 }
-pub fn getSlice(self: *CEmuCore, key: Property.Key, buffer: []u8) void {
+pub fn getSlice(self: *TiZr80, key: Property.Key, buffer: []u8) void {
     const needs_sync = switch (key) {
         else => true,
     };
@@ -209,7 +209,7 @@ pub fn getSlice(self: *CEmuCore, key: Property.Key, buffer: []u8) void {
             } else unreachable,
     }
 }
-fn setRaw(self: *CEmuCore, key: Property.Key, value: ?u24) void {
+fn setRaw(self: *TiZr80, key: Property.Key, value: ?u24) void {
     switch (key) {
         .register => |id| self.cpu.setAny(id, value.?),
         .shadow_register => |id| self.cpu.setAnyShadow(id, value.?),
@@ -219,7 +219,7 @@ fn setRaw(self: *CEmuCore, key: Property.Key, value: ?u24) void {
         else => std.debug.todo("unimplemented"),
     }
 }
-pub fn set(self: *CEmuCore, key: Property.Key, value: ?u24) void {
+pub fn set(self: *TiZr80, key: Property.Key, value: ?u24) void {
     const needs_sync = switch (key) {
         .key => false,
         else => true,
@@ -229,7 +229,7 @@ pub fn set(self: *CEmuCore, key: Property.Key, value: ?u24) void {
 
     self.setRaw(key, value);
 }
-pub fn setSlice(self: *CEmuCore, key: Property.Key, buffer: []const u8) void {
+pub fn setSlice(self: *TiZr80, key: Property.Key, buffer: []const u8) void {
     const needs_sync = switch (key) {
         .key => false,
         else => true,
@@ -253,13 +253,33 @@ pub fn setSlice(self: *CEmuCore, key: Property.Key, buffer: []const u8) void {
     }
 }
 
-pub fn doCommand(self: *CEmuCore, arguments: [:null]?[*:0]u8) i32 {
-    _ = self;
-    _ = arguments;
-    return 0;
+pub const CommandError = error{
+    InvalidCommand,
+} || std.mem.Allocator.Error || std.fs.File.OpenError;
+
+pub fn commandPointers(self: *TiZr80, arguments: [*:null]const ?[*:0]const u8) CommandError!i32 {
+    const slices = try self.allocator.allocSentinel(?[:0]const u8, std.mem.len(arguments), null);
+    defer self.allocator.free(slices);
+    for (slices) |*slice, index| slice.* = std.mem.span(arguments[index]);
+    return self.commandSlices(slices);
 }
 
-pub fn runLoop(self: *CEmuCore) void {
+pub fn commandSlices(self: *TiZr80, arguments: [:null]const ?[:0]const u8) CommandError!i32 {
+    _ = self;
+    if (arguments.len == 0) return CommandError.InvalidCommand;
+    if (std.mem.eql(u8, arguments[0].?, "load")) {
+        if (arguments.len != 3) return CommandError.InvalidCommand;
+        if (std.mem.eql(u8, arguments[1].?, "rom")) {
+            const file = try std.fs.cwd().openFileZ(arguments[2].?, .{});
+            defer file.close();
+        }
+    } else if (std.mem.eql(u8, arguments[0].?, "store")) {
+        if (arguments.len != 3) return CommandError.InvalidCommand;
+    }
+    return CommandError.InvalidCommand;
+}
+
+pub fn runLoop(self: *TiZr80) void {
     while (self.sync.?.loop()) {
         if (!self.sync.?.delay(std.time.ns_per_s / 10)) break;
 
@@ -268,21 +288,21 @@ pub fn runLoop(self: *CEmuCore) void {
     std.debug.assert(!self.sync.?.loop());
 }
 
-pub fn sleep(self: *CEmuCore) bool {
+pub fn sleep(self: *TiZr80) bool {
     return if (self.sync) |*sync| sync.sleep() else false;
 }
 
-pub fn wake(self: *CEmuCore) bool {
+pub fn wake(self: *TiZr80) bool {
     return if (self.sync) |*sync| sync.wake() else false;
 }
 
 test "create" {
-    const core = try CEmuCore.create(.{ .allocator = std.testing.allocator });
+    const core = try TiZr80.create(.{ .allocator = std.testing.allocator });
     defer core.destroy();
 }
 
 test "init" {
-    const core = try std.testing.allocator.create(CEmuCore);
+    const core = try std.testing.allocator.create(TiZr80);
     defer std.testing.allocator.destroy(core);
 
     try core.init(.{ .allocator = std.testing.allocator });
@@ -290,7 +310,7 @@ test "init" {
 }
 
 test "sleep/wake" {
-    const core = try CEmuCore.create(.{ .allocator = std.testing.allocator });
+    const core = try TiZr80.create(.{ .allocator = std.testing.allocator });
     defer core.destroy();
 
     try std.testing.expect(!core.sleep());
@@ -301,11 +321,11 @@ test "sleep/wake" {
 }
 
 test "single threaded" {
-    const core = try CEmuCore.create(.{ .allocator = std.testing.allocator, .threading = .SingleThreaded });
+    const core = try TiZr80.create(.{ .allocator = std.testing.allocator, .threading = .SingleThreaded });
     defer core.destroy();
 }
 
 test {
-    std.testing.refAllDecls(CEmuCore);
+    std.testing.refAllDecls(TiZr80);
     _ = @import("as.zig");
 }
