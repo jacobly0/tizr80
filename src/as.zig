@@ -2242,12 +2242,8 @@ pub fn assemble(allocator: std.mem.Allocator, source: [:0]const u8) Error![]u8 {
     var self = try Assembler.init(arena_allocator.allocator(), source);
     defer self.deinit();
 
-    defer if (false) std.debug.print("{}\n", .{std.fmt.fmtSliceHexUpper(self.output.items)});
-    defer if (true) std.debug.print("{s}correct prefix\n", .{
-        if (std.mem.startsWith(u8, @embedFile("as/ez80insts.bin"), self.output.items)) "" else "in",
-    });
     {
-        errdefer if (true) self.tokenizer.debugPrintLocation();
+        errdefer self.tokenizer.debugPrintLocation();
         try self.parseFile();
     }
 
@@ -2690,10 +2686,14 @@ fn parseAtom(self: *Assembler) Error!Expr {
 }
 
 test "as" {
+    var timer = try std.time.Timer.start();
+
     const expected = @embedFile("as/ez80insts.bin");
     const actual = try assemble(std.testing.allocator, @embedFile("as/ez80insts.src"));
     defer std.testing.allocator.free(actual);
-    if (false) try std.testing.expectEqualSlices(u8, expected, actual);
+    try std.testing.expectEqualSlices(u8, expected, actual);
+
+    std.debug.print("\n{} ns\n", .{timer.read()});
 }
 
 test {
