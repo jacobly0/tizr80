@@ -107,6 +107,7 @@ pub const Keyword = enum {
     outi2,
     p,
     pe,
+    pea,
     po,
     pop,
     push,
@@ -141,6 +142,7 @@ pub const Keyword = enum {
     stmix,
     sub,
     tst,
+    tstio,
     xor,
     z,
 };

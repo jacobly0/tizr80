@@ -11,7 +11,7 @@ pub const Error = error{
     InvalidOperation,
 } || Allocator.Error;
 
-pub const Register = enum {
+pub const Reg = enum {
     a,
     af,
     @"af'",
@@ -33,6 +33,7 @@ pub const Register = enum {
     iyl,
     l,
     m,
+    mb,
     nc,
     nz,
     p,
@@ -56,7 +57,7 @@ const Storage = packed union {
         }
 
         tag: enum(u1) { big, small } = .small,
-        base: enum(u2) { none, register, ix, iy },
+        base: enum(u2) { none, reg, ix, iy },
         integer: Integer,
     };
     const Big = struct {
@@ -64,7 +65,7 @@ const Storage = packed union {
             std.debug.assert(@alignOf(Big) >= 2);
         }
 
-        base: ?Register,
+        base: ?Reg,
         offset: big_int.Managed,
     };
 
@@ -73,7 +74,7 @@ const Storage = packed union {
 };
 const Contents = union(enum) {
     absolute: Storage.Small.Integer,
-    register: Register,
+    reg: Reg,
     ix: Storage.Small.Integer,
     iy: Storage.Small.Integer,
     big: *Storage.Big,
@@ -85,7 +86,7 @@ fn toContents(self: Value) Contents {
     return switch (self.storage.small.tag) {
         .small => switch (self.storage.small.base) {
             .none => .{ .absolute = self.storage.small.integer },
-            .register => .{ .register = @intToEnum(Register, self.storage.small.integer) },
+            .reg => .{ .reg = @intToEnum(Reg, self.storage.small.integer) },
             .ix => .{ .ix = self.storage.small.integer },
             .iy => .{ .iy = self.storage.small.integer },
         },
@@ -95,9 +96,9 @@ fn toContents(self: Value) Contents {
 fn fromContents(contents: Contents) Value {
     return .{ .storage = switch (contents) {
         .absolute => |absolute| .{ .small = .{ .base = .none, .integer = absolute } },
-        .register => |register| .{ .small = .{
-            .base = .register,
-            .integer = @enumToInt(register),
+        .reg => |reg| .{ .small = .{
+            .base = .reg,
+            .integer = @enumToInt(reg),
         } },
         .ix, .iy => |offset| result: {
             std.debug.assert(offset != 0);
@@ -111,7 +112,7 @@ fn fromContents(contents: Contents) Value {
     } };
 }
 
-pub fn init(allocator: Allocator, base: ?Register, offset: anytype) Allocator.Error!Value {
+pub fn init(allocator: Allocator, base: ?Reg, offset: anytype) Allocator.Error!Value {
     const Small = Storage.Small.Integer;
 
     const offset_type = switch (@typeInfo(@TypeOf(offset))) {
@@ -125,10 +126,10 @@ pub fn init(allocator: Allocator, base: ?Register, offset: anytype) Allocator.Er
         .Struct => offset.to(Small) catch null,
     };
 
-    if (base) |register| switch (register) {
-        else => if (small_offset) |small| if (small == 0) return fromContents(.{ .register = register }),
+    if (base) |reg| switch (reg) {
+        else => if (small_offset) |small| if (small == 0) return fromContents(.{ .reg = reg }),
         .ix, .iy => if (small_offset) |small|
-            return fromContents(if (small == 0) .{ .register = register } else switch (register) {
+            return fromContents(if (small == 0) .{ .reg = reg } else switch (reg) {
                 else => unreachable,
                 .ix => .{ .ix = small },
                 .iy => .{ .iy = small },
@@ -221,10 +222,10 @@ pub fn deinit(self: *Value) void {
     self.* = undefined;
 }
 
-pub fn getBase(self: Value) ?Register {
+pub fn getBase(self: Value) ?Reg {
     return switch (self.toContents()) {
         .absolute => null,
-        .register => |register| register,
+        .reg => |reg| reg,
         .ix => .ix,
         .iy => .iy,
         .big => |big| big.base,
@@ -233,7 +234,7 @@ pub fn getBase(self: Value) ?Register {
 pub fn getOffset(self: Value) union(enum) { small: Storage.Small.Integer, big: big_int.Const } {
     return switch (self.toContents()) {
         .absolute => |absolute| .{ .small = absolute },
-        .register => .{ .small = 0 },
+        .reg => .{ .small = 0 },
         .ix, .iy => |offset| .{ .small = offset },
         .big => |big| .{ .big = big.offset.toConst() },
     };
@@ -244,15 +245,11 @@ pub fn zeroOffset(self: Value) bool {
         .big => |big| big.eqZero(),
     };
 }
-
-pub fn isImmediate(self: Value) bool {
-    return self.getBase() == null;
-}
-pub fn isRegister(self: Value) bool {
-    return self.getBase() != null and self.zeroOffset();
-}
-pub fn isRegisterOffset(self: Value) bool {
-    return self.getBase() != null;
+pub fn orderOffset(self: Value, scalar: anytype) std.math.Order {
+    return switch (self.getOffset()) {
+        .small => |small| std.math.order(small, scalar),
+        .big => |big| big.orderAgainstScalar(scalar),
+    };
 }
 
 pub fn add(lhs: Value, rhs: Value, allocator: Allocator) Error!Value {
@@ -371,8 +368,8 @@ pub fn format(
         .small => |small| std.math.order(small, 0),
         .big => |big| if (big.eqZero()) .eq else if (big.positive) .gt else std.math.Order.lt,
     };
-    if (self.getBase()) |register| {
-        try writer.writeAll(@tagName(register));
+    if (self.getBase()) |reg| {
+        try writer.writeAll(@tagName(reg));
         try writer.writeByte(switch (offset_sign) {
             .lt => '-',
             .eq => return,
@@ -385,7 +382,7 @@ pub fn format(
     };
 }
 
-fn testGetFormat(string: []const u8, base: ?Register, offset: anytype) !void {
+fn testGetFormat(string: []const u8, base: ?Reg, offset: anytype) !void {
     var value = try Value.init(std.testing.allocator, base, offset);
     defer value.deinit();
 
