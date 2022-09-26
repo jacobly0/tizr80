@@ -299,7 +299,7 @@ pub fn wake(self: *TiZr80) bool {
 }
 
 fn keypad(self: *TiZr80) *Keypad {
-    return @fieldParentPtr(Keypad, "handler", self.ports.handler[0xA]);
+    return @fieldParentPtr(Keypad, "handler", self.ports.handlers[0xA]);
 }
 
 test "create" {

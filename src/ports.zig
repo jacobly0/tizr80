@@ -58,9 +58,9 @@ pub fn write(self: *Ports, address: u16, value: u8, cycles: *u64) void {
 
 pub fn peek(self: *Ports, address: u16) u8 {
     var cycles: u64 = undefined;
-    return self.read(self.core(), address, &cycles);
+    return self.read(address, &cycles);
 }
 pub fn poke(self: *Ports, address: u16, value: u8) void {
     var cycles: u64 = undefined;
-    self.write(self.core(), address, value, &cycles);
+    self.write(address, value, &cycles);
 }

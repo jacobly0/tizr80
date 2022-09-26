@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const Cpu = @import("cpu.zig");
-const Keypad = @import("keypad.zig");
+const Keypad = @import("ports/keypad.zig");
 const TiZr80 = @import("tizr80.zig");
 const util = @import("util.zig");
 
@@ -362,27 +362,32 @@ export fn tizr80_command(core: *tizr80, command: [*:null]const ?[*:0]const u8) c
         return -@as(c_int, @enumToInt(switch (err) {
         error.InvalidCommand, error.BadPathName, error.InvalidUtf8 => std.c.E.INVAL,
         error.OutOfMemory => std.c.E.NOMEM,
-        error.AccessDenied => std.c.E.ACCES,
+        error.AccessDenied, error.LockViolation => std.c.E.ACCES,
         error.DeviceBusy => std.c.E.BUSY,
         error.FileBusy => std.c.E.TXTBSY,
         error.FileLocksNotSupported => std.c.E.OPNOTSUPP,
         error.FileNotFound => std.c.E.NOENT,
         error.FileTooBig => std.c.E.FBIG,
-        error.InvalidHandle => std.c.E.BADF,
+        error.InvalidHandle, error.NotOpenForReading, error.NotOpenForWriting => std.c.E.BADF,
         error.IsDir => std.c.E.ISDIR,
         error.NameTooLong => std.c.E.NAMETOOLONG,
         error.NoDevice => std.c.E.NODEV,
         error.NoSpaceLeft => std.c.E.NOSPC,
         error.NotDir => std.c.E.NOTDIR,
         error.PathAlreadyExists => std.c.E.EXIST,
-        error.PipeBusy => std.c.E.PIPE,
+        error.BrokenPipe, error.PipeBusy => std.c.E.PIPE,
         error.ProcessFdQuotaExceeded => std.c.E.MFILE,
         error.SharingViolation => std.c.E.PERM,
         error.SymLinkLoop => std.c.E.LOOP,
         error.SystemFdQuotaExceeded => std.c.E.NFILE,
         error.SystemResources => std.c.E.NOBUFS,
-        error.Unexpected => std.c.E.IO,
         error.WouldBlock => std.c.E.AGAIN,
+        error.ConnectionResetByPeer => std.c.E.CONNRESET,
+        error.ConnectionTimedOut => std.c.E.TIMEDOUT,
+        error.DiskQuota => std.c.E.DQUOT,
+        error.InputOutput => std.c.E.IO,
+        error.OperationAborted => std.c.E.CANCELED,
+        error.Unexpected => std.c.E.NOTRECOVERABLE,
     }));
 }
 

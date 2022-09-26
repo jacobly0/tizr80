@@ -8,7 +8,7 @@ const util = @import("../util.zig");
 backend: Cpu.Backend,
 halted: bool = false,
 fetch_cache: u8 = undefined,
-debug: bool = true,
+debug: bool = false,
 
 pub fn create(allocator: std.mem.Allocator) !*Cpu.Backend {
     const self = try allocator.create(Interpreter);

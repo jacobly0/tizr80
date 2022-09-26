@@ -104,7 +104,6 @@ const Rule = struct {
     patterns: []const []const Pattern,
     encoders: []const Encoder,
 };
-const Rules = struct { rules: []const Rule };
 
 allocator: std.mem.Allocator,
 tokenizer: Tokenizer,
@@ -113,8 +112,8 @@ output: std.ArrayListUnmanaged(u8) = .{},
 origin: u24 = 0,
 adl: Mode = .{ .inst = .l, .imm = .il },
 
-const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rules = &.{} }, 0, .{
-    .adc = .{ .rules = &.{
+const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, []const Rule, &.{}, 0, .{
+    .adc = &.{
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .b } }}, .encoders = &.{.{ .opc = 0o210 }} },
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .c } }}, .encoders = &.{.{ .opc = 0o211 }} },
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .d } }}, .encoders = &.{.{ .opc = 0o212 }} },
@@ -154,8 +153,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             .patterns = &.{&.{ .{ .reg = .hl }, .{ .reg = .sp } }},
             .encoders = &.{ .ext_pre, .{ .opc = 0o172 } },
         },
-    } },
-    .add = .{ .rules = &.{
+    },
+    .add = &.{
         .{ .patterns = &.{
             &.{ .{ .reg = .hl }, .{ .reg = .bc } },
             &.{ .{ .reg = .ix }, .{ .reg = .bc } },
@@ -199,8 +198,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .a } }}, .encoders = &.{.{ .opc = 0o207 }} },
 
         .{ .patterns = &.{&.{ .{ .reg = .a }, .imm }}, .encoders = &.{ .{ .opc = 0o306 }, .byte_imm } },
-    } },
-    .@"and" = .{ .rules = &.{
+    },
+    .@"and" = &.{
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .b } }}, .encoders = &.{.{ .opc = 0o240 }} },
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .c } }}, .encoders = &.{.{ .opc = 0o241 }} },
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .d } }}, .encoders = &.{.{ .opc = 0o242 }} },
@@ -223,8 +222,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .a } }}, .encoders = &.{.{ .opc = 0o247 }} },
 
         .{ .patterns = &.{&.{ .{ .reg = .a }, .imm }}, .encoders = &.{ .{ .opc = 0o346 }, .byte_imm } },
-    } },
-    .bit = .{ .rules = &.{
+    },
+    .bit = &.{
         .{
             .patterns = &.{&.{ .{ .specific_imm = 0 }, .{ .reg = .b } }},
             .encoders = &.{ .bit_pre, .{ .opc = 0o100 } },
@@ -496,8 +495,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             .patterns = &.{&.{ .{ .specific_imm = 7 }, .{ .reg = .a } }},
             .encoders = &.{ .bit_pre, .{ .opc = 0o177 } },
         },
-    } },
-    .call = .{ .rules = &.{
+    },
+    .call = &.{
         .{
             .patterns = &.{&.{ .{ .reg = .nz }, .imm }},
             .encoders = &.{ .{ .opc = 0o304 }, .word_imm },
@@ -532,9 +531,9 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
         },
 
         .{ .patterns = &.{&.{.imm}}, .encoders = &.{ .{ .opc = 0o315 }, .word_imm } },
-    } },
-    .ccf = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o077 }} }} },
-    .cp = .{ .rules = &.{
+    },
+    .ccf = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o077 }} }},
+    .cp = &.{
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .b } }}, .encoders = &.{.{ .opc = 0o270 }} },
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .c } }}, .encoders = &.{.{ .opc = 0o271 }} },
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .d } }}, .encoders = &.{.{ .opc = 0o272 }} },
@@ -557,14 +556,14 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .a } }}, .encoders = &.{.{ .opc = 0o277 }} },
 
         .{ .patterns = &.{&.{ .{ .reg = .a }, .imm }}, .encoders = &.{ .{ .opc = 0o376 }, .byte_imm } },
-    } },
-    .cpd = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o251 } } }} },
-    .cpdr = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o271 } } }} },
-    .cpi = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o241 } } }} },
-    .cpir = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o261 } } }} },
-    .cpl = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o057 }} }} },
-    .daa = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o047 }} }} },
-    .dec = .{ .rules = &.{
+    },
+    .cpd = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o251 } } }},
+    .cpdr = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o271 } } }},
+    .cpi = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o241 } } }},
+    .cpir = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o261 } } }},
+    .cpl = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o057 }} }},
+    .daa = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o047 }} }},
+    .dec = &.{
         .{ .patterns = &.{&.{.{ .reg = .b }}}, .encoders = &.{.{ .opc = 0o005 }} },
         .{ .patterns = &.{&.{.{ .reg = .bc }}}, .encoders = &.{.{ .opc = 0o013 }} },
         .{ .patterns = &.{&.{.{ .reg = .c }}}, .encoders = &.{.{ .opc = 0o015 }} },
@@ -596,13 +595,11 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
         }, .encoders = &.{ .idx_pre, .{ .opc = 0o065 }, .off_imm } },
         .{ .patterns = &.{&.{.{ .reg = .sp }}}, .encoders = &.{.{ .opc = 0o073 }} },
         .{ .patterns = &.{&.{.{ .reg = .a }}}, .encoders = &.{.{ .opc = 0o075 }} },
-    } },
-    .di = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o363 }} }} },
-    .djnz = .{ .rules = &.{
-        .{ .patterns = &.{&.{.imm}}, .encoders = &.{ .{ .opc = 0o020 }, .rel_imm } },
-    } },
-    .ei = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o373 }} }} },
-    .ex = .{ .rules = &.{
+    },
+    .di = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o363 }} }},
+    .djnz = &.{.{ .patterns = &.{&.{.imm}}, .encoders = &.{ .{ .opc = 0o020 }, .rel_imm } }},
+    .ei = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o373 }} }},
+    .ex = &.{
         .{
             .patterns = &.{&.{ .{ .reg = .af }, .{ .reg = .@"af'" } }},
             .encoders = &.{.{ .opc = 0o010 }},
@@ -616,15 +613,15 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             &.{ .{ .ind_reg = .sp }, .{ .reg = .ix } },
             &.{ .{ .ind_reg = .sp }, .{ .reg = .iy } },
         }, .encoders = &.{ .idx_pre, .{ .opc = 0o343 } } },
-    } },
-    .exx = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o331 }} }} },
-    .halt = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o166 }} }} },
-    .im = .{ .rules = &.{
+    },
+    .exx = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o331 }} }},
+    .halt = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o166 }} }},
+    .im = &.{
         .{ .patterns = &.{&.{.{ .specific_imm = 0 }}}, .encoders = &.{ .ext_pre, .{ .opc = 0o106 } } },
         .{ .patterns = &.{&.{.{ .specific_imm = 1 }}}, .encoders = &.{ .ext_pre, .{ .opc = 0o126 } } },
         .{ .patterns = &.{&.{.{ .specific_imm = 2 }}}, .encoders = &.{ .ext_pre, .{ .opc = 0o136 } } },
-    } },
-    .in = .{ .rules = &.{
+    },
+    .in = &.{
         .{
             .patterns = &.{&.{ .{ .reg = .a }, .ind_imm }},
             .encoders = &.{ .{ .opc = 0o333 }, .byte_imm },
@@ -662,8 +659,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             .patterns = &.{&.{ .{ .reg = .a }, .{ .ind_reg = .bc } }},
             .encoders = &.{ .ext_pre, .{ .opc = 0o170 } },
         },
-    } },
-    .in0 = .{ .rules = &.{
+    },
+    .in0 = &.{
         .{
             .patterns = &.{&.{ .{ .reg = .b }, .ind_imm }},
             .encoders = &.{ .ext_pre, .{ .opc = 0o000 }, .byte_imm },
@@ -696,8 +693,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             .patterns = &.{&.{ .{ .reg = .a }, .ind_imm }},
             .encoders = &.{ .ext_pre, .{ .opc = 0o070 }, .byte_imm },
         },
-    } },
-    .inc = .{ .rules = &.{
+    },
+    .inc = &.{
         .{ .patterns = &.{&.{.{ .reg = .bc }}}, .encoders = &.{.{ .opc = 0o003 }} },
         .{ .patterns = &.{&.{.{ .reg = .b }}}, .encoders = &.{.{ .opc = 0o004 }} },
         .{ .patterns = &.{&.{.{ .reg = .c }}}, .encoders = &.{.{ .opc = 0o014 }} },
@@ -729,22 +726,22 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             &.{.{ .ind_reg_off = .iy }},
         }, .encoders = &.{ .idx_pre, .{ .opc = 0o064 }, .off_imm } },
         .{ .patterns = &.{&.{.{ .reg = .a }}}, .encoders = &.{.{ .opc = 0o074 }} },
-    } },
-    .ind = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o252 } } }} },
-    .ind2 = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o214 } } }} },
-    .ind2r = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o234 } } }} },
-    .indm = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o212 } } }} },
-    .indmr = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o232 } } }} },
-    .indr = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o272 } } }} },
-    .indrx = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o312 } } }} },
-    .ini = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o242 } } }} },
-    .ini2 = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o204 } } }} },
-    .ini2r = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o224 } } }} },
-    .inim = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o202 } } }} },
-    .inimr = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o222 } } }} },
-    .inir = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o262 } } }} },
-    .inirx = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o302 } } }} },
-    .jp = .{ .rules = &.{
+    },
+    .ind = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o252 } } }},
+    .ind2 = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o214 } } }},
+    .ind2r = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o234 } } }},
+    .indm = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o212 } } }},
+    .indmr = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o232 } } }},
+    .indr = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o272 } } }},
+    .indrx = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o312 } } }},
+    .ini = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o242 } } }},
+    .ini2 = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o204 } } }},
+    .ini2r = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o224 } } }},
+    .inim = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o202 } } }},
+    .inimr = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o222 } } }},
+    .inir = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o262 } } }},
+    .inirx = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o302 } } }},
+    .jp = &.{
         .{
             .patterns = &.{&.{ .{ .reg = .nz }, .imm }},
             .encoders = &.{ .{ .opc = 0o302 }, .word_imm },
@@ -785,16 +782,16 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             &.{.{ .ind_reg = .ix }},
             &.{.{ .ind_reg = .iy }},
         }, .encoders = &.{ .idx_pre, .{ .opc = 0o351 } } },
-    } },
-    .jr = .{ .rules = &.{
+    },
+    .jr = &.{
         .{ .patterns = &.{&.{.imm}}, .encoders = &.{ .{ .opc = 0o030 }, .rel_imm } },
 
         .{ .patterns = &.{&.{ .{ .reg = .nz }, .imm }}, .encoders = &.{ .{ .opc = 0o040 }, .rel_imm } },
         .{ .patterns = &.{&.{ .{ .reg = .z }, .imm }}, .encoders = &.{ .{ .opc = 0o050 }, .rel_imm } },
         .{ .patterns = &.{&.{ .{ .reg = .nc }, .imm }}, .encoders = &.{ .{ .opc = 0o060 }, .rel_imm } },
         .{ .patterns = &.{&.{ .{ .reg = .c }, .imm }}, .encoders = &.{ .{ .opc = 0o070 }, .rel_imm } },
-    } },
-    .ld = .{ .rules = &.{
+    },
+    .ld = &.{
         .{
             .patterns = &.{&.{ .{ .reg = .bc }, .imm }},
             .encoders = &.{ .{ .opc = 0o001 }, .word_imm },
@@ -1236,12 +1233,12 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             .patterns = &.{&.{ .{ .reg = .hl }, .{ .reg = .i } }},
             .encoders = &.{ .ext_pre, .{ .opc = 0o327 } },
         },
-    } },
-    .ldd = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o250 } } }} },
-    .lddr = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o270 } } }} },
-    .ldi = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o240 } } }} },
-    .ldir = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o260 } } }} },
-    .lea = .{ .rules = &.{
+    },
+    .ldd = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o250 } } }},
+    .lddr = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o270 } } }},
+    .ldi = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o240 } } }},
+    .ldir = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o260 } } }},
+    .lea = &.{
         .{
             .patterns = &.{&.{ .{ .reg = .bc }, .{ .reg_off = .ix } }},
             .encoders = &.{ .ext_pre, .{ .opc = 0o002 }, .off_imm },
@@ -1282,16 +1279,16 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             .patterns = &.{&.{ .{ .reg = .iy }, .{ .reg_off = .ix } }},
             .encoders = &.{ .ext_pre, .{ .opc = 0o125 }, .off_imm },
         },
-    } },
-    .mlt = .{ .rules = &.{
+    },
+    .mlt = &.{
         .{ .patterns = &.{&.{.{ .reg = .bc }}}, .encoders = &.{ .ext_pre, .{ .opc = 0o114 } } },
         .{ .patterns = &.{&.{.{ .reg = .de }}}, .encoders = &.{ .ext_pre, .{ .opc = 0o134 } } },
         .{ .patterns = &.{&.{.{ .reg = .hl }}}, .encoders = &.{ .ext_pre, .{ .opc = 0o154 } } },
         .{ .patterns = &.{&.{.{ .reg = .sp }}}, .encoders = &.{ .ext_pre, .{ .opc = 0o174 } } },
-    } },
-    .neg = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o104 } } }} },
-    .nop = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o000 }} }} },
-    .@"or" = .{ .rules = &.{
+    },
+    .neg = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o104 } } }},
+    .nop = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o000 }} }},
+    .@"or" = &.{
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .b } }}, .encoders = &.{.{ .opc = 0o260 }} },
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .c } }}, .encoders = &.{.{ .opc = 0o261 }} },
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .d } }}, .encoders = &.{.{ .opc = 0o262 }} },
@@ -1314,18 +1311,18 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .a } }}, .encoders = &.{.{ .opc = 0o267 }} },
 
         .{ .patterns = &.{&.{ .{ .reg = .a }, .imm }}, .encoders = &.{ .{ .opc = 0o366 }, .byte_imm } },
-    } },
-    .otd2r = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o274 } } }} },
-    .otdm = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o213 } } }} },
-    .otdmr = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o233 } } }} },
-    .otdr = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o273 } } }} },
-    .otdrx = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o313 } } }} },
-    .oti2r = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o264 } } }} },
-    .otim = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o203 } } }} },
-    .otimr = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o223 } } }} },
-    .otir = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o263 } } }} },
-    .otirx = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o303 } } }} },
-    .out = .{ .rules = &.{
+    },
+    .otd2r = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o274 } } }},
+    .otdm = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o213 } } }},
+    .otdmr = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o233 } } }},
+    .otdr = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o273 } } }},
+    .otdrx = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o313 } } }},
+    .oti2r = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o264 } } }},
+    .otim = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o203 } } }},
+    .otimr = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o223 } } }},
+    .otir = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o263 } } }},
+    .otirx = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o303 } } }},
+    .out = &.{
         .{
             .patterns = &.{&.{ .ind_imm, .{ .reg = .a } }},
             .encoders = &.{ .{ .opc = 0o323 }, .byte_imm },
@@ -1359,8 +1356,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             .patterns = &.{&.{ .{ .ind_reg = .bc }, .{ .reg = .a } }},
             .encoders = &.{ .ext_pre, .{ .opc = 0o171 } },
         },
-    } },
-    .out0 = .{ .rules = &.{
+    },
+    .out0 = &.{
         .{
             .patterns = &.{&.{ .ind_imm, .{ .reg = .b } }},
             .encoders = &.{ .ext_pre, .{ .opc = 0o001 }, .byte_imm },
@@ -1389,12 +1386,12 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             .patterns = &.{&.{ .ind_imm, .{ .reg = .a } }},
             .encoders = &.{ .ext_pre, .{ .opc = 0o071 }, .byte_imm },
         },
-    } },
-    .outd = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o253 } } }} },
-    .outd2 = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o254 } } }} },
-    .outi = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o243 } } }} },
-    .outi2 = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o244 } } }} },
-    .pea = .{ .rules = &.{
+    },
+    .outd = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o253 } } }},
+    .outd2 = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o254 } } }},
+    .outi = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o243 } } }},
+    .outi2 = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o244 } } }},
+    .pea = &.{
         .{
             .patterns = &.{&.{.{ .reg_off = .ix }}},
             .encoders = &.{ .ext_pre, .{ .opc = 0o145 }, .off_imm },
@@ -1403,8 +1400,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             .patterns = &.{&.{.{ .reg_off = .iy }}},
             .encoders = &.{ .ext_pre, .{ .opc = 0o146 }, .off_imm },
         },
-    } },
-    .pop = .{ .rules = &.{
+    },
+    .pop = &.{
         .{ .patterns = &.{&.{.{ .reg = .bc }}}, .encoders = &.{.{ .opc = 0o301 }} },
         .{ .patterns = &.{&.{.{ .reg = .de }}}, .encoders = &.{.{ .opc = 0o321 }} },
         .{ .patterns = &.{
@@ -1413,8 +1410,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             &.{.{ .reg = .iy }},
         }, .encoders = &.{ .idx_pre, .{ .opc = 0o341 } } },
         .{ .patterns = &.{&.{.{ .reg = .af }}}, .encoders = &.{.{ .opc = 0o361 }} },
-    } },
-    .push = .{ .rules = &.{
+    },
+    .push = &.{
         .{ .patterns = &.{&.{.{ .reg = .bc }}}, .encoders = &.{.{ .opc = 0o305 }} },
         .{ .patterns = &.{&.{.{ .reg = .de }}}, .encoders = &.{.{ .opc = 0o325 }} },
         .{ .patterns = &.{
@@ -1423,8 +1420,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             &.{.{ .reg = .iy }},
         }, .encoders = &.{ .idx_pre, .{ .opc = 0o345 } } },
         .{ .patterns = &.{&.{.{ .reg = .af }}}, .encoders = &.{.{ .opc = 0o365 }} },
-    } },
-    .res = .{ .rules = &.{
+    },
+    .res = &.{
         .{
             .patterns = &.{&.{ .{ .specific_imm = 0 }, .{ .reg = .b } }},
             .encoders = &.{ .bit_pre, .{ .opc = 0o200 } },
@@ -1696,8 +1693,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             .patterns = &.{&.{ .{ .specific_imm = 7 }, .{ .reg = .a } }},
             .encoders = &.{ .bit_pre, .{ .opc = 0o277 } },
         },
-    } },
-    .ret = .{ .rules = &.{
+    },
+    .ret = &.{
         .{ .patterns = &.{&.{.{ .reg = .nz }}}, .encoders = &.{.{ .opc = 0o300 }} },
         .{ .patterns = &.{&.{.{ .reg = .z }}}, .encoders = &.{.{ .opc = 0o310 }} },
         .{ .patterns = &.{&.{.{ .reg = .nc }}}, .encoders = &.{.{ .opc = 0o320 }} },
@@ -1708,10 +1705,10 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
         .{ .patterns = &.{&.{.{ .reg = .m }}}, .encoders = &.{.{ .opc = 0o370 }} },
 
         .{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o311 }} },
-    } },
-    .reti = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o115 } } }} },
-    .retn = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o105 } } }} },
-    .rl = .{ .rules = &.{
+    },
+    .reti = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o115 } } }},
+    .retn = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o105 } } }},
+    .rl = &.{
         .{ .patterns = &.{&.{.{ .reg = .b }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o020 } } },
         .{ .patterns = &.{&.{.{ .reg = .c }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o021 } } },
         .{ .patterns = &.{&.{.{ .reg = .d }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o022 } } },
@@ -1724,9 +1721,9 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             &.{.{ .ind_reg_off = .iy }},
         }, .encoders = &.{ .idx_pre, .bit_pre, .off_imm, .{ .opc = 0o026 } } },
         .{ .patterns = &.{&.{.{ .reg = .a }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o027 } } },
-    } },
-    .rla = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o027 }} }} },
-    .rlc = .{ .rules = &.{
+    },
+    .rla = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o027 }} }},
+    .rlc = &.{
         .{ .patterns = &.{&.{.{ .reg = .b }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o000 } } },
         .{ .patterns = &.{&.{.{ .reg = .c }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o001 } } },
         .{ .patterns = &.{&.{.{ .reg = .d }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o002 } } },
@@ -1739,10 +1736,10 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             &.{.{ .ind_reg_off = .iy }},
         }, .encoders = &.{ .idx_pre, .bit_pre, .off_imm, .{ .opc = 0o006 } } },
         .{ .patterns = &.{&.{.{ .reg = .a }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o007 } } },
-    } },
-    .rlca = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o007 }} }} },
-    .rld = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o157 } } }} },
-    .rr = .{ .rules = &.{
+    },
+    .rlca = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o007 }} }},
+    .rld = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o157 } } }},
+    .rr = &.{
         .{ .patterns = &.{&.{.{ .reg = .b }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o030 } } },
         .{ .patterns = &.{&.{.{ .reg = .c }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o031 } } },
         .{ .patterns = &.{&.{.{ .reg = .d }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o032 } } },
@@ -1755,9 +1752,9 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             &.{.{ .ind_reg_off = .iy }},
         }, .encoders = &.{ .idx_pre, .bit_pre, .off_imm, .{ .opc = 0o036 } } },
         .{ .patterns = &.{&.{.{ .reg = .a }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o037 } } },
-    } },
-    .rra = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o037 }} }} },
-    .rrc = .{ .rules = &.{
+    },
+    .rra = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o037 }} }},
+    .rrc = &.{
         .{ .patterns = &.{&.{.{ .reg = .b }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o010 } } },
         .{ .patterns = &.{&.{.{ .reg = .c }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o011 } } },
         .{ .patterns = &.{&.{.{ .reg = .d }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o012 } } },
@@ -1770,11 +1767,11 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             &.{.{ .ind_reg_off = .iy }},
         }, .encoders = &.{ .idx_pre, .bit_pre, .off_imm, .{ .opc = 0o016 } } },
         .{ .patterns = &.{&.{.{ .reg = .a }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o017 } } },
-    } },
-    .rrca = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o017 }} }} },
-    .rrd = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o147 } } }} },
-    .rsmix = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o176 } } }} },
-    .rst = .{ .rules = &.{
+    },
+    .rrca = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o017 }} }},
+    .rrd = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o147 } } }},
+    .rsmix = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o176 } } }},
+    .rst = &.{
         .{ .patterns = &.{&.{.{ .specific_imm = 0o000 }}}, .encoders = &.{.{ .opc = 0o307 }} },
         .{ .patterns = &.{&.{.{ .specific_imm = 0o010 }}}, .encoders = &.{.{ .opc = 0o317 }} },
         .{ .patterns = &.{&.{.{ .specific_imm = 0o020 }}}, .encoders = &.{.{ .opc = 0o327 }} },
@@ -1783,8 +1780,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
         .{ .patterns = &.{&.{.{ .specific_imm = 0o050 }}}, .encoders = &.{.{ .opc = 0o357 }} },
         .{ .patterns = &.{&.{.{ .specific_imm = 0o060 }}}, .encoders = &.{.{ .opc = 0o367 }} },
         .{ .patterns = &.{&.{.{ .specific_imm = 0o070 }}}, .encoders = &.{.{ .opc = 0o377 }} },
-    } },
-    .sbc = .{ .rules = &.{
+    },
+    .sbc = &.{
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .b } }}, .encoders = &.{.{ .opc = 0o230 }} },
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .c } }}, .encoders = &.{.{ .opc = 0o231 }} },
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .d } }}, .encoders = &.{.{ .opc = 0o232 }} },
@@ -1824,9 +1821,9 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             .patterns = &.{&.{ .{ .reg = .hl }, .{ .reg = .sp } }},
             .encoders = &.{ .ext_pre, .{ .opc = 0o162 } },
         },
-    } },
-    .scf = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o067 }} }} },
-    .set = .{ .rules = &.{
+    },
+    .scf = &.{.{ .patterns = &.{&.{}}, .encoders = &.{.{ .opc = 0o067 }} }},
+    .set = &.{
         .{
             .patterns = &.{&.{ .{ .specific_imm = 0 }, .{ .reg = .b } }},
             .encoders = &.{ .bit_pre, .{ .opc = 0o300 } },
@@ -2098,8 +2095,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             .patterns = &.{&.{ .{ .specific_imm = 7 }, .{ .reg = .a } }},
             .encoders = &.{ .bit_pre, .{ .opc = 0o377 } },
         },
-    } },
-    .sla = .{ .rules = &.{
+    },
+    .sla = &.{
         .{ .patterns = &.{&.{.{ .reg = .b }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o040 } } },
         .{ .patterns = &.{&.{.{ .reg = .c }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o041 } } },
         .{ .patterns = &.{&.{.{ .reg = .d }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o042 } } },
@@ -2112,9 +2109,9 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             &.{.{ .ind_reg_off = .iy }},
         }, .encoders = &.{ .idx_pre, .bit_pre, .off_imm, .{ .opc = 0o046 } } },
         .{ .patterns = &.{&.{.{ .reg = .a }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o047 } } },
-    } },
-    .slp = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o166 } } }} },
-    .sra = .{ .rules = &.{
+    },
+    .slp = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o166 } } }},
+    .sra = &.{
         .{ .patterns = &.{&.{.{ .reg = .b }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o050 } } },
         .{ .patterns = &.{&.{.{ .reg = .c }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o051 } } },
         .{ .patterns = &.{&.{.{ .reg = .d }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o052 } } },
@@ -2127,8 +2124,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             &.{.{ .ind_reg_off = .iy }},
         }, .encoders = &.{ .idx_pre, .bit_pre, .off_imm, .{ .opc = 0o056 } } },
         .{ .patterns = &.{&.{.{ .reg = .a }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o057 } } },
-    } },
-    .srl = .{ .rules = &.{
+    },
+    .srl = &.{
         .{ .patterns = &.{&.{.{ .reg = .b }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o070 } } },
         .{ .patterns = &.{&.{.{ .reg = .c }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o071 } } },
         .{ .patterns = &.{&.{.{ .reg = .d }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o072 } } },
@@ -2141,9 +2138,9 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             &.{.{ .ind_reg_off = .iy }},
         }, .encoders = &.{ .idx_pre, .bit_pre, .off_imm, .{ .opc = 0o076 } } },
         .{ .patterns = &.{&.{.{ .reg = .a }}}, .encoders = &.{ .bit_pre, .{ .opc = 0o077 } } },
-    } },
-    .stmix = .{ .rules = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o175 } } }} },
-    .sub = .{ .rules = &.{
+    },
+    .stmix = &.{.{ .patterns = &.{&.{}}, .encoders = &.{ .ext_pre, .{ .opc = 0o175 } } }},
+    .sub = &.{
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .b } }}, .encoders = &.{.{ .opc = 0o220 }} },
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .c } }}, .encoders = &.{.{ .opc = 0o221 }} },
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .d } }}, .encoders = &.{.{ .opc = 0o222 }} },
@@ -2166,8 +2163,8 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .a } }}, .encoders = &.{.{ .opc = 0o227 }} },
 
         .{ .patterns = &.{&.{ .{ .reg = .a }, .imm }}, .encoders = &.{ .{ .opc = 0o326 }, .byte_imm } },
-    } },
-    .tst = .{ .rules = &.{
+    },
+    .tst = &.{
         .{
             .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .b } }},
             .encoders = &.{ .ext_pre, .{ .opc = 0o004 } },
@@ -2205,11 +2202,9 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
             .patterns = &.{&.{ .{ .reg = .a }, .imm }},
             .encoders = &.{ .ext_pre, .{ .opc = 0o144 }, .byte_imm },
         },
-    } },
-    .tstio = .{ .rules = &.{
-        .{ .patterns = &.{&.{.imm}}, .encoders = &.{ .ext_pre, .{ .opc = 0o164 }, .byte_imm } },
-    } },
-    .xor = .{ .rules = &.{
+    },
+    .tstio = &.{.{ .patterns = &.{&.{.imm}}, .encoders = &.{ .ext_pre, .{ .opc = 0o164 }, .byte_imm } }},
+    .xor = &.{
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .b } }}, .encoders = &.{.{ .opc = 0o250 }} },
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .c } }}, .encoders = &.{.{ .opc = 0o251 }} },
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .d } }}, .encoders = &.{.{ .opc = 0o252 }} },
@@ -2232,7 +2227,7 @@ const ez80 = std.enums.directEnumArrayDefault(Tokenizer.Keyword, Rules, .{ .rule
         .{ .patterns = &.{&.{ .{ .reg = .a }, .{ .reg = .a } }}, .encoders = &.{.{ .opc = 0o257 }} },
 
         .{ .patterns = &.{&.{ .{ .reg = .a }, .imm }}, .encoders = &.{ .{ .opc = 0o356 }, .byte_imm } },
-    } },
+    },
 });
 
 pub fn assemble(allocator: std.mem.Allocator, source: [:0]const u8) Error![]u8 {
@@ -2509,7 +2504,7 @@ fn parseInstruction(self: *Assembler) Error!void {
             std.debug.print("{}", .{operand});
         }
     };
-    for (ez80[@enumToInt(mnemonic)].rules) |rule| {
+    for (ez80[@enumToInt(mnemonic)]) |rule| {
         const pattern_index = for (rule.patterns) |pattern, pattern_index|
             if (pattern.len == operands.len and for (pattern) |operand_pattern, operand|
                 if (operand_pattern.match(operands[operand])) continue else break false
