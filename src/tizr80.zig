@@ -4,7 +4,7 @@ const std = @import("std");
 const Sync = @import("sync.zig");
 const Memory = @import("memory.zig");
 const Cpu = @import("cpu.zig");
-const Keypad = @import("keypad.zig");
+const Keypad = @import("ports/keypad.zig");
 const Ports = @import("ports.zig");
 
 pub const options = @import("options");
@@ -104,7 +104,6 @@ sync: ?Sync = undefined,
 mem: Memory = undefined,
 ports: Ports = undefined,
 cpu: Cpu = undefined,
-keypad: Keypad = undefined,
 thread: ?std.Thread = null,
 
 pub fn create(create_options: CreateOptions) !*TiZr80 {
@@ -130,7 +129,6 @@ pub fn init(self: *TiZr80, create_options: CreateOptions) !void {
     try self.mem.init(self.allocator);
     try self.ports.init(self.allocator);
     try self.cpu.init(self.allocator);
-    try self.keypad.init();
     if (self.sync) |*sync| {
         const thread = try std.Thread.spawn(
             .{},
@@ -147,7 +145,6 @@ pub fn init(self: *TiZr80, create_options: CreateOptions) !void {
 pub fn deinit(self: *TiZr80) void {
     if (self.sync) |*sync| sync.stop();
     if (self.thread) |thread| thread.join();
-    self.keypad.deinit();
     self.cpu.deinit(self.allocator);
     self.ports.deinit(self.allocator);
     self.mem.deinit(self.allocator);
@@ -168,7 +165,7 @@ fn getRaw(self: *TiZr80, key: Property.Key) ?u24 {
     return switch (key) {
         .register => |id| self.cpu.getAny(id),
         .shadow_register => |id| self.cpu.getAnyShadow(id),
-        .key => |key| self.keypad.getKey(key),
+        .key => |key| self.keypad().getKey(key),
         .flash => |address| self.mem.peek(address),
         .ram => |address| self.mem.peek(Memory.ram_start + @as(u24, address)),
         .port => |address| self.ports.peek(address),
@@ -213,7 +210,7 @@ fn setRaw(self: *TiZr80, key: Property.Key, value: ?u24) void {
     switch (key) {
         .register => |id| self.cpu.setAny(id, value.?),
         .shadow_register => |id| self.cpu.setAnyShadow(id, value.?),
-        .key => |key| self.keypad.setKey(key, @intCast(u1, value.?)),
+        .key => |key| self.keypad().setKey(key, @intCast(u1, value.?)),
         .ram => |address| self.mem.poke(Memory.ram_start + @as(u24, address), @intCast(u8, value.?)),
         .port => |address| self.ports.poke(address, @intCast(u8, value.?)),
         else => std.debug.todo("unimplemented"),
@@ -255,7 +252,8 @@ pub fn setSlice(self: *TiZr80, key: Property.Key, buffer: []const u8) void {
 
 pub const CommandError = error{
     InvalidCommand,
-} || std.mem.Allocator.Error || std.fs.File.OpenError;
+} || std.mem.Allocator.Error ||
+    std.fs.File.OpenError || std.fs.File.ReadError || std.fs.File.WriteError;
 
 pub fn commandPointers(self: *TiZr80, arguments: [*:null]const ?[*:0]const u8) CommandError!i32 {
     const slices = try self.allocator.allocSentinel(?[:0]const u8, std.mem.len(arguments), null);
@@ -265,26 +263,30 @@ pub fn commandPointers(self: *TiZr80, arguments: [*:null]const ?[*:0]const u8) C
 }
 
 pub fn commandSlices(self: *TiZr80, arguments: [:null]const ?[:0]const u8) CommandError!i32 {
-    _ = self;
     if (arguments.len == 0) return CommandError.InvalidCommand;
     if (std.mem.eql(u8, arguments[0].?, "load")) {
         if (arguments.len != 3) return CommandError.InvalidCommand;
         if (std.mem.eql(u8, arguments[1].?, "rom")) {
             const file = try std.fs.cwd().openFileZ(arguments[2].?, .{});
             defer file.close();
+
+            return @boolToInt(try file.readAll(self.mem.flash) < self.mem.flash.len);
         }
-    } else if (std.mem.eql(u8, arguments[0].?, "store")) {
+    } else if (std.mem.eql(u8, arguments[0].?, "save")) {
         if (arguments.len != 3) return CommandError.InvalidCommand;
+        if (std.mem.eql(u8, arguments[1].?, "rom")) {
+            const file = try std.fs.cwd().createFileZ(arguments[2].?, .{});
+            defer file.close();
+
+            try file.writeAll(self.mem.flash);
+            return 0;
+        }
     }
     return CommandError.InvalidCommand;
 }
 
 pub fn runLoop(self: *TiZr80) void {
-    while (self.sync.?.loop()) {
-        if (!self.sync.?.delay(std.time.ns_per_s / 10)) break;
-
-        self.cpu.step();
-    } else return;
+    while (self.sync.?.loop()) self.cpu.step() else return;
     std.debug.assert(!self.sync.?.loop());
 }
 
@@ -294,6 +296,10 @@ pub fn sleep(self: *TiZr80) bool {
 
 pub fn wake(self: *TiZr80) bool {
     return if (self.sync) |*sync| sync.wake() else false;
+}
+
+fn keypad(self: *TiZr80) *Keypad {
+    return @fieldParentPtr(Keypad, "handler", self.ports.handler[0xA]);
 }
 
 test "create" {

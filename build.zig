@@ -29,7 +29,7 @@ pub fn build(b: *std.build.Builder) !void {
     const options = b.addOptions();
     options.addOption(bool, "debugger", debugger);
 
-    const zig_fmt = b.addFmt(&.{ @src().file, "src" });
+    const zig_fmt = b.addFmt(&.{ @src().file, "src", "example" });
 
     const clang_format = if (b.findProgram(&.{"clang-format"}, &.{})) |executable| command: {
         const command = b.addSystemCommand(&.{ executable, "-i" });
@@ -65,7 +65,12 @@ pub fn build(b: *std.build.Builder) !void {
         .exclude_extensions = &.{"~"},
     });
 
-    const main_tests = b.addTest(b.fmt("src/{s}.zig", .{project_name}));
+    const main_pkg = std.build.Pkg{
+        .name = project_name,
+        .source = std.build.FileSource.relative(b.fmt("src/{s}.zig", .{project_name})),
+    };
+
+    const main_tests = b.addTestSource(main_pkg.source);
     if (target) |cross_target| main_tests.setTarget(cross_target);
     main_tests.setBuildMode(mode);
     main_tests.setFilter(test_filter);
@@ -111,4 +116,20 @@ pub fn build(b: *std.build.Builder) !void {
         if (test_filter == null or std.mem.indexOf(u8, "capi-" ++ field.name, test_filter.?) != null)
             test_step.dependOn(&test_api.run().step);
     }
+
+    const zig_example = b.addExecutable(
+        b.fmt("{s}-example-zig", .{project_name}),
+        "example/zig/main.zig",
+    );
+    zig_example.setBuildMode(mode);
+    zig_example.addOptions("options", options);
+    zig_example.addPackage(main_pkg);
+    zig_example.install();
+    zig_example.step.dependOn(fmt_step);
+
+    const zig_example_run = zig_example.run();
+    if (b.args) |args| zig_example_run.addArgs(args);
+
+    const run_step = b.step("run", "Run example");
+    run_step.dependOn(&zig_example_run.step);
 }

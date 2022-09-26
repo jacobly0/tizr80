@@ -1,10 +1,10 @@
 const std = @import("std");
 
-const TiZr80 = @import("tizr80.zig");
 const Cpu = @This();
 const decode = @import("cpu/decode.zig");
 const Dummy = @import("cpu/dummy.zig");
 const Interpreter = @import("cpu/interp.zig");
+const TiZr80 = @import("tizr80.zig");
 const util = @import("util.zig");
 
 pub const ExecuteMode = enum { flush, step, run };
@@ -335,7 +335,7 @@ pub fn deinit(self: *Cpu, allocator: std.mem.Allocator) void {
     self.* = undefined;
 }
 
-fn core(self: *Cpu) *TiZr80 {
+pub fn core(self: *Cpu) *TiZr80 {
     return @fieldParentPtr(TiZr80, "cpu", self);
 }
 

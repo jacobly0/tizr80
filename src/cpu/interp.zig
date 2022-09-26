@@ -8,6 +8,7 @@ const util = @import("../util.zig");
 backend: Cpu.Backend,
 halted: bool = false,
 fetch_cache: u8 = undefined,
+debug: bool = true,
 
 pub fn create(allocator: std.mem.Allocator) !*Cpu.Backend {
     const self = try allocator.create(Interpreter);
@@ -49,7 +50,6 @@ fn execute(backend: *Cpu.Backend, cpu: *Cpu, mode: Cpu.ExecuteMode) void {
         if (mode == .step) break :execute;
         std.debug.assert(mode == .run);
     }
-    if (self.halted) std.debug.print("Doing nothing, halted!\n", .{});
 }
 
 const State = struct {
@@ -63,24 +63,26 @@ const State = struct {
     repeat_counter: u1 = 0,
 
     fn dump(self: *State) void {
-        if (false) std.debug.print(
+        const pc = self.cpu.get(.pc);
+        if (pc >= 0x5889 and pc <= 0x58A3) return;
+        if (self.interp.debug) std.debug.print(
             \\
-            \\AF {X:0>4}     {X:0>4} AF'
-            \\BC {X:0>6} {X:0>6} BC'
-            \\DE {X:0>6} {X:0>6} DE'
-            \\HL {X:0>6} {X:0>6} HL'
-            \\IX {X:0>6} {X:0>6} IY
-            \\PC {X:0>6}     {X:0>2} R
-            \\   {X:0>2} {:10} CC
+            \\AF {X:0>4}     {X:0>4} AF'  (SP+00) {X:0>6}
+            \\BC {X:0>6} {X:0>6} BC'  (SP+03) {X:0>6}
+            \\DE {X:0>6} {X:0>6} DE'  (SP+06) {X:0>6}
+            \\HL {X:0>6} {X:0>6} HL'  (SP+09) {X:0>6}
+            \\IX {X:0>6} {X:0>6} IY   (SP+12) {X:0>6}
+            \\PC {X:0>6}     {X:0>2} R    (SP+15) {X:0>6}
+            \\   {X:0>2} {:10} CC   (SP+18) {X:0>6}
             \\
         , .{
-            self.cpu.get(.af),       self.cpu.getShadow(.af),
-            self.cpu.get(.bc),       self.cpu.getShadow(.bc),
-            self.cpu.get(.de),       self.cpu.getShadow(.de),
-            self.cpu.get(.hl),       self.cpu.getShadow(.hl),
-            self.cpu.get(.ix),       self.cpu.get(.iy),
-            self.cpu.get(.pc),       self.cpu.get(.r),
-            self.interp.fetch_cache, self.cpu.cycles,
+            self.cpu.get(.af),       self.cpu.getShadow(.af), self.cpu.core().mem.peekLong(self.cpu.get(.spl) +% 0),
+            self.cpu.get(.bc),       self.cpu.getShadow(.bc), self.cpu.core().mem.peekLong(self.cpu.get(.spl) +% 3),
+            self.cpu.get(.de),       self.cpu.getShadow(.de), self.cpu.core().mem.peekLong(self.cpu.get(.spl) +% 6),
+            self.cpu.get(.hl),       self.cpu.getShadow(.hl), self.cpu.core().mem.peekLong(self.cpu.get(.spl) +% 9),
+            self.cpu.get(.ix),       self.cpu.get(.iy),       self.cpu.core().mem.peekLong(self.cpu.get(.spl) +% 12),
+            self.cpu.get(.pc),       self.cpu.get(.r),        self.cpu.core().mem.peekLong(self.cpu.get(.spl) +% 15),
+            self.interp.fetch_cache, self.cpu.cycles,         self.cpu.core().mem.peekLong(self.cpu.get(.spl) +% 18),
         });
     }
 

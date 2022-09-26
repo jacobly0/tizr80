@@ -1,8 +1,8 @@
 const std = @import("std");
 
-const TiZr80 = @import("tizr80.zig");
 const Cpu = @import("cpu.zig");
 const Keypad = @import("keypad.zig");
+const TiZr80 = @import("tizr80.zig");
 const util = @import("util.zig");
 
 pub const allow_todo_in_release = true;

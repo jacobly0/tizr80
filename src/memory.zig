@@ -1,18 +1,21 @@
 const std = @import("std");
 
-const TiZr80 = @import("tizr80.zig");
 const Memory = @This();
 const Ports = @import("ports.zig");
+const TiZr80 = @import("tizr80.zig");
 const util = @import("util.zig");
 
 pub const ram_start: u24 = 0xD00000;
 pub const ram_len: u19 = 0x40000 + 320 * 240 * 2;
 pub const ram_end: u24 = ram_start + ram_len - 1;
 
+flash_wait_states: u9,
 flash: []u8,
 ram: *[ram_len]u8,
 
 pub fn init(self: *Memory, allocator: std.mem.Allocator) !void {
+    self.flash_wait_states = 10;
+
     self.flash = try allocator.alloc(u8, 0x400000);
     errdefer allocator.free(self.flash);
 
@@ -47,7 +50,7 @@ fn mmio(address: u24, cycles: *u64) ?u16 {
 pub fn read(self: *Memory, address: u24, cycles: *u64) u8 {
     switch (util.bit.extract(address, u4, 20)) {
         0x0...0xC => if (address < self.flash.len) {
-            cycles.* +%= 10;
+            cycles.* +%= self.flash_wait_states;
             return self.flash[address];
         } else {
             cycles.* +%= 258;
@@ -66,7 +69,7 @@ pub fn read(self: *Memory, address: u24, cycles: *u64) u8 {
 pub fn write(self: *Memory, address: u24, value: u8, cycles: *u64) void {
     switch (util.bit.extract(address, u4, 20)) {
         0x0...0xC => if (address < self.flash.len) {
-            cycles.* +%= 10;
+            cycles.* +%= self.flash_wait_states;
             self.flash[address] = value;
         } else {
             cycles.* +%= 258;
@@ -89,4 +92,11 @@ pub fn peek(self: *Memory, address: u24) u8 {
 pub fn poke(self: *Memory, address: u24, value: u8) void {
     var cycles: u64 = undefined;
     self.write(address, value, &cycles);
+}
+
+pub fn peekLong(self: *Memory, address: u24) u24 {
+    const low = self.peek(address +% 0);
+    const high = self.peek(address +% 1);
+    const upper = self.peek(address +% 2);
+    return util.bit.concat(.{ upper, high, low });
 }
