@@ -161,8 +161,8 @@ fn IntTypeForBuffer(buffer: []const u8) type {
     return std.meta.Int(.unsigned, std.math.min(buffer.len, 3) * 8);
 }
 
-fn getRaw(self: *TiZr80, key: Property.Key) ?u24 {
-    return switch (key) {
+fn getRaw(self: *TiZr80, property: Property.Key) ?u24 {
+    return switch (property) {
         .register => |id| self.cpu.getAny(id),
         .shadow_register => |id| self.cpu.getAnyShadow(id),
         .key => |key| self.keypad().getKey(key),
@@ -172,23 +172,23 @@ fn getRaw(self: *TiZr80, key: Property.Key) ?u24 {
         else => std.debug.todo("unimplemented"),
     };
 }
-pub fn get(self: *TiZr80, key: Property.Key) ?u24 {
-    const needs_sync = switch (key) {
+pub fn get(self: *TiZr80, property: Property.Key) ?u24 {
+    const needs_sync = switch (property) {
         else => true,
     };
     if (needs_sync) if (self.sync) |*sync| sync.enter();
     defer if (needs_sync) if (self.sync) |*sync| sync.leave();
 
-    return self.getRaw(key);
+    return self.getRaw(property);
 }
-pub fn getSlice(self: *TiZr80, key: Property.Key, buffer: []u8) void {
-    const needs_sync = switch (key) {
+pub fn getSlice(self: *TiZr80, property: Property.Key, buffer: []u8) void {
+    const needs_sync = switch (property) {
         else => true,
     };
     if (needs_sync) if (self.sync) |*sync| sync.enter();
     defer if (needs_sync) if (self.sync) |*sync| sync.leave();
 
-    switch (key) {
+    switch (property) {
         .flash => |address| for (buffer) |*value, offset| {
             value.* = @intCast(u8, self.getRaw(.{ .flash = address + @intCast(u23, offset) }).?);
         },
@@ -198,7 +198,7 @@ pub fn getSlice(self: *TiZr80, key: Property.Key, buffer: []u8) void {
         .port => |address| for (buffer) |*value, offset| {
             value.* = @intCast(u8, self.getRaw(.{ .port = address + @intCast(u16, offset) }).?);
         },
-        else => if (self.getRaw(key)) |value|
+        else => if (self.getRaw(property)) |value|
             inline for (.{ 3, 2, 1, 0 }) |len| {
                 const IntType = std.meta.Int(.unsigned, len * 8);
                 if (len <= buffer.len)
@@ -206,8 +206,8 @@ pub fn getSlice(self: *TiZr80, key: Property.Key, buffer: []u8) void {
             } else unreachable,
     }
 }
-fn setRaw(self: *TiZr80, key: Property.Key, value: ?u24) void {
-    switch (key) {
+fn setRaw(self: *TiZr80, property: Property.Key, value: ?u24) void {
+    switch (property) {
         .register => |id| self.cpu.setAny(id, value.?),
         .shadow_register => |id| self.cpu.setAnyShadow(id, value.?),
         .key => |key| self.keypad().setKey(key, @intCast(u1, value.?)),
@@ -216,25 +216,25 @@ fn setRaw(self: *TiZr80, key: Property.Key, value: ?u24) void {
         else => std.debug.todo("unimplemented"),
     }
 }
-pub fn set(self: *TiZr80, key: Property.Key, value: ?u24) void {
-    const needs_sync = switch (key) {
+pub fn set(self: *TiZr80, property: Property.Key, value: ?u24) void {
+    const needs_sync = switch (property) {
         .key => false,
         else => true,
     };
     if (needs_sync) if (self.sync) |*sync| sync.enter();
     defer if (needs_sync) if (self.sync) |*sync| sync.leave();
 
-    self.setRaw(key, value);
+    self.setRaw(property, value);
 }
-pub fn setSlice(self: *TiZr80, key: Property.Key, buffer: []const u8) void {
-    const needs_sync = switch (key) {
+pub fn setSlice(self: *TiZr80, property: Property.Key, buffer: []const u8) void {
+    const needs_sync = switch (property) {
         .key => false,
         else => true,
     };
     if (needs_sync) if (self.sync) |*sync| sync.enter();
     defer if (needs_sync) if (self.sync) |*sync| sync.leave();
 
-    switch (key) {
+    switch (property) {
         .ram => |address| for (buffer) |value, offset| {
             self.setRaw(.{ .ram = address + @intCast(u19, offset) }, value);
         },
@@ -242,7 +242,7 @@ pub fn setSlice(self: *TiZr80, key: Property.Key, buffer: []const u8) void {
             self.setRaw(.{ .port = address + @intCast(u16, offset) }, value);
         },
         else => {
-            self.setRaw(key, inline for (.{ 3, 2, 1, 0 }) |len| {
+            self.setRaw(property, inline for (.{ 3, 2, 1, 0 }) |len| {
                 if (len <= buffer.len)
                     break std.mem.readIntSliceLittle(std.meta.Int(.unsigned, len * 8), buffer);
             });

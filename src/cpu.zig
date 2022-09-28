@@ -198,10 +198,9 @@ pub fn get(self: *const Cpu, comptime id: RegisterId) RegisterType(id) {
     }, RegisterType(id), registerBitOffset(id));
 }
 pub fn getAny(self: *const Cpu, id: RegisterId) u24 {
-    return inline for (@typeInfo(RegisterId).Enum.fields) |field| {
-        const comptimeId = @field(RegisterId, field.name);
-        if (id == comptimeId) break self.get(comptimeId);
-    } else unreachable;
+    return switch (id) {
+        inline else => |comptimeId| self.get(comptimeId),
+    };
 }
 
 pub fn getShadow(self: *const Cpu, comptime id: RegisterId) RegisterType(id) {
@@ -220,10 +219,9 @@ pub fn getShadow(self: *const Cpu, comptime id: RegisterId) RegisterType(id) {
     }, RegisterType(id), registerBitOffset(id));
 }
 pub fn getAnyShadow(self: *const Cpu, id: RegisterId) u24 {
-    return inline for (@typeInfo(RegisterId).Enum.fields) |field| {
-        const comptimeId = @field(RegisterId, field.name);
-        if (id == comptimeId) break self.getShadow(comptimeId);
-    } else unreachable;
+    return switch (id) {
+        inline else => |comptimeId| self.getShadow(comptimeId),
+    };
 }
 
 pub fn set(self: *Cpu, comptime id: RegisterId, value: RegisterType(id)) void {
@@ -278,11 +276,12 @@ pub fn set(self: *Cpu, comptime id: RegisterId, value: RegisterType(id)) void {
     }, value, registerBitOffset(id));
 }
 pub fn setAny(self: *Cpu, id: RegisterId, value: u24) void {
-    inline for (@typeInfo(RegisterId).Enum.fields) |field| {
-        const comptimeId = @field(RegisterId, field.name);
-        if (id == comptimeId)
-            break self.set(comptimeId, @intCast(RegisterType(comptimeId), value));
-    } else unreachable;
+    switch (id) {
+        inline else => |comptimeId| self.set(
+            comptimeId,
+            @intCast(RegisterType(comptimeId), value),
+        ),
+    }
 }
 
 pub fn setShadow(self: *Cpu, comptime id: RegisterId, value: RegisterType(id)) void {
@@ -307,11 +306,12 @@ pub fn setShadow(self: *Cpu, comptime id: RegisterId, value: RegisterType(id)) v
     }, value, registerBitOffset(id));
 }
 pub fn setAnyShadow(self: *Cpu, id: RegisterId, value: u24) void {
-    inline for (@typeInfo(RegisterId).Enum.fields) |field| {
-        const comptimeId = @field(RegisterId, field.name);
-        if (id == comptimeId)
-            break self.setShadow(comptimeId, @intCast(RegisterType(comptimeId), value));
-    } else unreachable;
+    switch (id) {
+        inline else => |comptimeId| self.setShadow(
+            comptimeId,
+            @intCast(RegisterType(comptimeId), value),
+        ),
+    }
 }
 
 pub fn add(self: *Cpu, comptime id: RegisterId, comptime offset: comptime_int) void {

@@ -213,13 +213,9 @@ const State = struct {
         self: *State,
         comptime dispatcher: fn (*State, comptime u8) Error!void,
     ) error{ConditionFailed}!void {
-        comptime var opcode = std.math.minInt(u8);
-        inline while (true) : (opcode += 1) {
-            if (opcode == self.accumulator)
-                return dispatcher(self, opcode) catch |err|
-                    return @errSetCast(Error, err);
-            if (opcode == std.math.maxInt(u8)) unreachable;
-        }
+        return try switch (@intCast(u8, self.accumulator)) {
+            inline else => |comptimeOpcode| dispatcher(self, comptimeOpcode),
+        };
     }
 
     pub fn checkNonZero(self: *State) error{ConditionFailed}!void {
