@@ -357,10 +357,16 @@ export fn tizr80_set_buffer(
 ) callconv(.C) void {
     return core.unwrap().setSlice(prop.unwrapKey(addr), buf[0..len]);
 }
-export fn tizr80_command(core: *tizr80, command: [*:null]const ?[*:0]const u8) callconv(.C) c_int {
-    return core.unwrap().commandPointers(command) catch |err|
+
+fn wrapCommandResult(result: TiZr80.CommandSplitError!i32) c_int {
+    return result catch |err|
         return -@as(c_int, @enumToInt(switch (err) {
-        error.InvalidCommand, error.BadPathName, error.InvalidUtf8 => std.c.E.INVAL,
+        error.InvalidEscape,
+        error.UnterminatedString,
+        error.InvalidCommand,
+        error.BadPathName,
+        error.InvalidUtf8,
+        => std.c.E.INVAL,
         error.OutOfMemory => std.c.E.NOMEM,
         error.AccessDenied, error.LockViolation => std.c.E.ACCES,
         error.DeviceBusy => std.c.E.BUSY,
@@ -389,6 +395,12 @@ export fn tizr80_command(core: *tizr80, command: [*:null]const ?[*:0]const u8) c
         error.OperationAborted => std.c.E.CANCELED,
         error.Unexpected => std.c.E.NOTRECOVERABLE,
     }));
+}
+export fn tizr80_command_split(core: *tizr80, command: [*:0]const u8) callconv(.C) c_int {
+    return wrapCommandResult(core.unwrap().commandSplit(std.mem.span(command)));
+}
+export fn tizr80_command(core: *tizr80, command: [*:null]const ?[*:0]const u8) callconv(.C) c_int {
+    return wrapCommandResult(core.unwrap().commandPointers(command));
 }
 
 export fn tizr80_sleep(core: *tizr80) bool {

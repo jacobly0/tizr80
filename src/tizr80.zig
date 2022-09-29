@@ -6,6 +6,7 @@ const Memory = @import("memory.zig");
 const Cpu = @import("cpu.zig");
 const Keypad = @import("ports/keypad.zig");
 const Ports = @import("ports.zig");
+const util = @import("util.zig");
 
 pub const options = @import("options");
 
@@ -255,27 +256,39 @@ pub const CommandError = error{
 } || std.mem.Allocator.Error ||
     std.fs.File.OpenError || std.fs.File.ReadError || std.fs.File.WriteError;
 
+pub const CommandSplitError = CommandError || util.ArgumentSplitter.Error;
+
+pub fn commandSplit(self: *TiZr80, line: []const u8) CommandSplitError!i32 {
+    var argument_splitter = util.ArgumentSplitter.init(self.allocator, line);
+    defer argument_splitter.deinit();
+
+    const arguments = try argument_splitter.restOwned();
+    defer self.allocator.free(arguments);
+
+    return self.commandSlices(arguments);
+}
+
 pub fn commandPointers(self: *TiZr80, arguments: [*:null]const ?[*:0]const u8) CommandError!i32 {
-    const slices = try self.allocator.allocSentinel(?[:0]const u8, std.mem.len(arguments), null);
+    const slices = try self.allocator.alloc([:0]const u8, std.mem.len(arguments));
     defer self.allocator.free(slices);
-    for (slices) |*slice, index| slice.* = std.mem.span(arguments[index]);
+    for (slices) |*slice, index| slice.* = std.mem.span(arguments[index].?);
     return self.commandSlices(slices);
 }
 
-pub fn commandSlices(self: *TiZr80, arguments: [:null]const ?[:0]const u8) CommandError!i32 {
+pub fn commandSlices(self: *TiZr80, arguments: []const [:0]const u8) CommandError!i32 {
     if (arguments.len == 0) return CommandError.InvalidCommand;
-    if (std.mem.eql(u8, arguments[0].?, "load")) {
+    if (std.mem.eql(u8, arguments[0], "load")) {
         if (arguments.len != 3) return CommandError.InvalidCommand;
-        if (std.mem.eql(u8, arguments[1].?, "rom")) {
-            const file = try std.fs.cwd().openFileZ(arguments[2].?, .{});
+        if (std.mem.eql(u8, arguments[1], "rom")) {
+            const file = try std.fs.cwd().openFileZ(arguments[2], .{});
             defer file.close();
 
             return @boolToInt(try file.readAll(self.mem.flash) < self.mem.flash.len);
         }
-    } else if (std.mem.eql(u8, arguments[0].?, "save")) {
+    } else if (std.mem.eql(u8, arguments[0], "save")) {
         if (arguments.len != 3) return CommandError.InvalidCommand;
-        if (std.mem.eql(u8, arguments[1].?, "rom")) {
-            const file = try std.fs.cwd().createFileZ(arguments[2].?, .{});
+        if (std.mem.eql(u8, arguments[1], "rom")) {
+            const file = try std.fs.cwd().createFileZ(arguments[2], .{});
             defer file.close();
 
             try file.writeAll(self.mem.flash);

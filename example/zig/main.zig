@@ -21,7 +21,7 @@ pub fn main() !void {
         if (std.mem.eql(u8, arg, "--rom")) {
             if (args.next()) |rom| {
                 // FIXME: use tuple when that doesn't trigger a segfault
-                if (try core.commandSlices(&[_:null]?[:0]const u8{ "load", "rom", rom }) != 0) {
+                if (try core.commandSlices(&[_][:0]const u8{ "load", "rom", rom }) != 0) {
                     try stderr.print("Unable to load rom \"{s}\"\n", .{rom});
                     std.process.exit(1);
                 }

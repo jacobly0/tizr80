@@ -1026,7 +1026,7 @@ fn consumeSlice(buffer: *[:0]const u8, len: usize) []const u8 {
 }
 
 test "ezex" {
-    if (false) return error.SkipZigTest;
+    if (true) return error.SkipZigTest;
 
     const core = try @import("../tizr80.zig").create(.{
         .allocator = std.testing.allocator,

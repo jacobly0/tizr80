@@ -96,3 +96,142 @@ test "pow" {
     try std.testing.expectEqual(1_000_000, pow(10, 6));
     try std.testing.expectEqual(1_000_000_000_000, pow(100, 6));
 }
+
+pub const ArgumentSplitter = struct {
+    pub const Error = error{
+        UnterminatedString,
+        InvalidEscape,
+    } || std.mem.Allocator.Error;
+
+    allocator: std.mem.Allocator,
+    line: []const u8,
+    storage: std.ArrayListUnmanaged(u8) = .{},
+    arguments: std.ArrayListUnmanaged([:0]const u8) = .{},
+
+    pub fn init(allocator: std.mem.Allocator, line: []const u8) ArgumentSplitter {
+        return .{ .allocator = allocator, .line = line };
+    }
+    pub fn deinit(self: *ArgumentSplitter) void {
+        self.storage.deinit(self.allocator);
+        self.arguments.deinit(self.allocator);
+    }
+
+    fn appendNext(self: *ArgumentSplitter) Error!?[:0]const u8 {
+        const start = self.storage.items.len;
+
+        const line = std.mem.trimLeft(u8, self.line, "\t\n\r ");
+        var index: usize = 0;
+        defer self.line = line[index..];
+        if (line.len == 0) return null;
+
+        const State = enum { default, escape, single, double, double_escape };
+        var state: State = .default;
+
+        while (index < line.len) : (index += 1) {
+            const char = line[index];
+            const transition: struct { copy: bool, state: State } = switch (state) {
+                .default => switch (char) {
+                    '\t', '\n', '\r', ' ' => break,
+                    '"' => .{ .copy = false, .state = .double },
+                    '\'' => .{ .copy = false, .state = .single },
+                    '\\' => .{ .copy = false, .state = .escape },
+                    else => .{ .copy = true, .state = .default },
+                },
+                .escape => .{ .copy = true, .state = .default },
+                .single => switch (char) {
+                    '\'' => .{ .copy = false, .state = .default },
+                    else => .{ .copy = true, .state = .single },
+                },
+                .double => switch (char) {
+                    '"' => .{ .copy = false, .state = .default },
+                    '\\' => .{ .copy = false, .state = .double_escape },
+                    else => .{ .copy = true, .state = .double },
+                },
+                .double_escape => .{ .copy = true, .state = .double },
+            };
+            if (transition.copy) try self.storage.append(self.allocator, char);
+            state = transition.state;
+        }
+
+        switch (state) {
+            .default => {
+                const end = self.storage.items.len;
+                try self.storage.append(self.allocator, 0);
+                return self.storage.items[start..end :0];
+            },
+            .escape, .double_escape => return error.InvalidEscape,
+            .single, .double => return error.UnterminatedString,
+        }
+    }
+    pub fn next(self: *ArgumentSplitter) Error!?[:0]const u8 {
+        self.storage.clearRetainingCapacity();
+        return self.appendNext();
+    }
+    pub fn restOwned(self: *ArgumentSplitter) Error![][:0]const u8 {
+        var arguments: std.ArrayListUnmanaged([:0]const u8) = .{};
+        defer arguments.deinit(self.allocator);
+
+        while (try self.appendNext()) |argument| try arguments.append(self.allocator, argument);
+
+        // The pointers in arguments may have been invalidated, so recompute them all.
+        var storage = self.storage.items;
+        for (arguments.items) |*argument| {
+            argument.* = storage[0..argument.len :0];
+            storage = storage[argument.len + 1 ..];
+        }
+
+        return arguments.toOwnedSlice(self.allocator);
+    }
+};
+
+fn testArgumentSplitter(
+    allocator: std.mem.Allocator,
+    expected_arguments: []const []const u8,
+    line: []const u8,
+) !void {
+    {
+        var argument_splitter = ArgumentSplitter.init(allocator, line);
+        defer argument_splitter.deinit();
+
+        for (expected_arguments) |expected_argument| {
+            const actual_argument = try argument_splitter.next();
+            try std.testing.expect(actual_argument != null);
+            try std.testing.expectEqualStrings(expected_argument, actual_argument.?);
+        }
+        try std.testing.expectEqual(null, try argument_splitter.next());
+    }
+
+    {
+        var argument_splitter = ArgumentSplitter.init(allocator, line);
+        defer argument_splitter.deinit();
+
+        const actual_arguments = try argument_splitter.restOwned();
+        defer allocator.free(actual_arguments);
+
+        try std.testing.expectEqual(expected_arguments.len, actual_arguments.len);
+        for (expected_arguments) |expected_argument, argument_index|
+            try std.testing.expectEqualStrings(expected_argument, actual_arguments[argument_index]);
+    }
+}
+
+test "ArgumentSplitter" {
+    inline for (.{
+        .{ &.{}, "" },
+        .{ &.{ "one", "two" }, " \tone\ntwo\r" },
+        .{ &.{"single quoted"}, "\'single quoted\'" },
+        .{ &.{"double quoted"}, "\"double quoted\"" },
+        .{
+            &.{
+                \\first argument
+                ,
+                \\'second argument'
+                ,
+                \\"third argument"
+            },
+            \\first\ argument
+            \\\''second argument'\'
+            \\"\"third argument\""
+        },
+    }) |case|
+        try std.testing.checkAllAllocationFailures(std.testing.allocator, testArgumentSplitter, case);
+}

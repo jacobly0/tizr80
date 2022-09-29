@@ -171,6 +171,8 @@ TIZR80_EXPORT void tizr80_get_buffer(tizr80_t *core, tizr80_prop_t prop, int32_t
 TIZR80_EXPORT void tizr80_set(tizr80_t *core, tizr80_prop_t prop, int32_t addr, int32_t val);
 TIZR80_EXPORT void tizr80_set_buffer(tizr80_t *core, tizr80_prop_t prop, int32_t addr,
                                      const void *buf, uint32_t len);
+
+TIZR80_EXPORT int tizr80_command_split(tizr80_t *core, const char *command);
 TIZR80_EXPORT int tizr80_command(tizr80_t *core, const char *const *command);
 
 TIZR80_EXPORT bool tizr80_sleep(tizr80_t *core);
