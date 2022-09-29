@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const Assembler = @This();
-const SmallArrayList = @import("small_array_list.zig").SmallArrayList;
 const Tokenizer = @import("as/tokenizer.zig");
 const util = @import("util.zig");
 const Value = @import("as/value.zig");
@@ -2480,18 +2479,19 @@ fn parseInstruction(self: *Assembler) Error!void {
     const mnemonic = (try self.tokenizer.next()).keyword;
     const suffix = try self.parseSuffix();
 
-    var operand_list: SmallArrayList(Expr, 2) = .{};
-    defer operand_list.deinit(self.allocator);
-    defer for (operand_list.items()) |*operand| operand.deinit();
+    var operand_list: std.BoundedArray(Expr, 2) = .{};
+    defer for (operand_list.slice()) |*operand| operand.deinit();
     if (switch (try self.tokenizer.peek()) {
         else => true,
         .eof, .eol, .comment => false,
     }) while (true) {
-        try operand_list.append(self.allocator, try self.parseExpr());
+        operand_list.append(try self.parseExpr()) catch |err| switch (err) {
+            error.Overflow => return Error.IllegalInstruction,
+        };
         if (try self.tokenizer.peek() != .comma) break;
         _ = try self.tokenizer.next();
     };
-    const operands = operand_list.items();
+    const operands = operand_list.constSlice();
 
     errdefer if (true) {
         std.debug.print("\n{s}\t", .{@tagName(mnemonic)});
