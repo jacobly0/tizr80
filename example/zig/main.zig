@@ -18,14 +18,10 @@ pub fn main() !void {
 
     _ = args.skip();
     while (args.next()) |arg| {
-        if (std.mem.eql(u8, arg, "--rom")) {
-            if (args.next()) |rom| {
-                // FIXME: use tuple when that doesn't trigger a segfault
-                if (try core.commandSlices(&[_][:0]const u8{ "load", "rom", rom }) != 0) {
-                    try stderr.print("Unable to load rom \"{s}\"\n", .{rom});
-                    std.process.exit(1);
-                }
-            } else {
+        if (std.mem.eql(u8, arg, "-o") or std.mem.eql(u8, arg, "--one-line")) {
+            if (args.next()) |command|
+                _ = try core.commandSplit(command)
+            else {
                 try stderr.print("Missing {s} argument\n", .{arg});
                 std.process.exit(1);
             }
@@ -35,21 +31,14 @@ pub fn main() !void {
         }
     }
 
+    var last_line = std.ArrayList(u8).init(allocator);
+    defer last_line.deinit();
+
     var line = std.ArrayList(u8).init(allocator);
     defer line.deinit();
 
-    const Command = enum {
-        unknown,
-        help,
-        pause,
-        quit,
-        run,
-        step,
-    };
-    var last_command: ?Command = null;
-
     while (true) {
-        try stdout.print("> ", .{});
+        try stdout.print("tizr80> ", .{});
         stdin.readUntilDelimiterArrayList(&line, '\n', 1024 * 1024) catch |err| switch (err) {
             error.EndOfStream => {
                 try stdout.print("\n", .{});
@@ -58,50 +47,12 @@ pub fn main() !void {
             else => |e| return e,
         };
 
-        const command: Command = if (line.items.len == 0)
-            if (last_command) |last| last else .help
-        else if (std.mem.eql(u8, line.items, "q") or
+        if (std.mem.eql(u8, line.items, "q") or
             std.mem.eql(u8, line.items, "quit") or
             std.mem.eql(u8, line.items, "exit"))
-            .quit
-        else if (std.mem.eql(u8, line.items, "?") or
-            std.mem.eql(u8, line.items, "h") or
-            std.mem.eql(u8, line.items, "help"))
-            .help
-        else if (std.mem.eql(u8, line.items, "r") or
-            std.mem.eql(u8, line.items, "c") or
-            std.mem.eql(u8, line.items, "run") or
-            std.mem.eql(u8, line.items, "continue"))
-            .run
-        else if (std.mem.eql(u8, line.items, "p") or
-            std.mem.eql(u8, line.items, "pause"))
-            .pause
-        else if (std.mem.eql(u8, line.items, "s") or
-            std.mem.eql(u8, line.items, "step"))
-            .step
-        else
-            .unknown;
-
-        switch (command) {
-            .unknown => try stdout.print("unknown command: {s}\n", .{line.items}),
-            .help => try stdout.print(
-                \\ Commands:
-                \\   help    print this help
-                \\   pause   stop executing instructions
-                \\   quit    terminate the program
-                \\   run     start executing instructions
-                \\   step    execute one instruction
-                \\
-            , .{}),
-            .pause => _ = core.sleep(),
-            .quit => break,
-            .run => _ = core.wake(),
-            .step => {
-                _ = core.sleep();
-                core.cpu.step();
-            },
-        }
-
-        last_command = command;
+            break;
+        if (line.items.len != 0)
+            std.mem.swap(std.ArrayList(u8), &last_line, &line);
+        _ = try core.commandSplit(last_line.items);
     }
 }

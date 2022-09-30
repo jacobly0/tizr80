@@ -10,6 +10,7 @@ const util = @import("util.zig");
 pub const ExecuteMode = enum { flush, step, run };
 pub const Backend = struct {
     flush: bool = true,
+    debug: bool = false,
     execute: *const fn (*Backend, *Cpu, ExecuteMode) void,
     destroy: *const fn (*Backend, std.mem.Allocator) void,
 };

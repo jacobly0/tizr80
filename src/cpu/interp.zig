@@ -8,7 +8,6 @@ const util = @import("../util.zig");
 backend: Cpu.Backend,
 halted: bool = false,
 fetch_cache: u8 = undefined,
-debug: bool = false,
 
 pub fn create(allocator: std.mem.Allocator) !*Cpu.Backend {
     const self = try allocator.create(Interpreter);
@@ -65,7 +64,7 @@ const State = struct {
     fn dump(self: *State) void {
         const pc = self.cpu.get(.pc);
         if (pc >= 0x5889 and pc <= 0x58A3) return;
-        if (self.interp.debug) std.debug.print(
+        if (self.interp.backend.debug) std.debug.print(
             \\
             \\AF {X:0>4}     {X:0>4} AF'  (SP+00) {X:0>6}
             \\BC {X:0>6} {X:0>6} BC'  (SP+03) {X:0>6}
@@ -1026,7 +1025,7 @@ fn consumeSlice(buffer: *[:0]const u8, len: usize) []const u8 {
 }
 
 test "ezex" {
-    if (true) return error.SkipZigTest;
+    if (false) return error.SkipZigTest;
 
     const core = try @import("../tizr80.zig").create(.{
         .allocator = std.testing.allocator,

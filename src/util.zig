@@ -213,7 +213,6 @@ fn testArgumentSplitter(
             try std.testing.expectEqualStrings(expected_argument, actual_arguments[argument_index]);
     }
 }
-
 test "ArgumentSplitter" {
     inline for (.{
         .{ &.{}, "" },

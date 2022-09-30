@@ -1,11 +1,12 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
-const Sync = @import("sync.zig");
-const Memory = @import("memory.zig");
+const Commands = @import("commands.zig");
 const Cpu = @import("cpu.zig");
 const Keypad = @import("ports/keypad.zig");
+const Memory = @import("memory.zig");
 const Ports = @import("ports.zig");
+const Sync = @import("sync.zig");
 const util = @import("util.zig");
 
 pub const options = @import("options");
@@ -105,6 +106,7 @@ sync: ?Sync = undefined,
 mem: Memory = undefined,
 ports: Ports = undefined,
 cpu: Cpu = undefined,
+commands: Commands = undefined,
 thread: ?std.Thread = null,
 
 pub fn create(create_options: CreateOptions) !*TiZr80 {
@@ -115,7 +117,8 @@ pub fn create(create_options: CreateOptions) !*TiZr80 {
     return self;
 }
 pub fn init(self: *TiZr80, create_options: CreateOptions) !void {
-    errdefer self.deinit();
+    errdefer self.* = undefined;
+
     self.* = TiZr80{
         .allocator = create_options.allocator,
         .signal_handler = create_options.signal_handler,
@@ -127,9 +130,21 @@ pub fn init(self: *TiZr80, create_options: CreateOptions) !void {
             try self.sync.?.init();
         },
     }
+    errdefer if (self.sync) |*sync| sync.deinit();
+
     try self.mem.init(self.allocator);
+    errdefer self.mem.deinit(self.allocator);
+
     try self.ports.init(self.allocator);
+    errdefer self.ports.deinit(self.allocator);
+
     try self.cpu.init(self.allocator);
+    errdefer self.cpu.deinit(self.allocator);
+
+    try self.commands.init(self.allocator);
+    errdefer self.commands.deinit(self.allocator);
+
+    errdefer if (self.thread) |thread| thread.join();
     if (self.sync) |*sync| {
         const thread = try std.Thread.spawn(
             .{},
@@ -141,11 +156,13 @@ pub fn init(self: *TiZr80, create_options: CreateOptions) !void {
         self.thread = thread;
         sync.start();
     }
+    errdefer if (self.sync) |*sync| sync.stop();
 }
 
 pub fn deinit(self: *TiZr80) void {
     if (self.sync) |*sync| sync.stop();
     if (self.thread) |thread| thread.join();
+    self.commands.deinit(self.allocator);
     self.cpu.deinit(self.allocator);
     self.ports.deinit(self.allocator);
     self.mem.deinit(self.allocator);
@@ -251,12 +268,7 @@ pub fn setSlice(self: *TiZr80, property: Property.Key, buffer: []const u8) void 
     }
 }
 
-pub const CommandError = error{
-    InvalidCommand,
-} || std.mem.Allocator.Error ||
-    std.fs.File.OpenError || std.fs.File.ReadError || std.fs.File.WriteError;
-
-pub const CommandSplitError = CommandError || util.ArgumentSplitter.Error;
+pub const CommandSplitError = Commands.Error || util.ArgumentSplitter.Error;
 
 pub fn commandSplit(self: *TiZr80, line: []const u8) CommandSplitError!i32 {
     var argument_splitter = util.ArgumentSplitter.init(self.allocator, line);
@@ -268,34 +280,18 @@ pub fn commandSplit(self: *TiZr80, line: []const u8) CommandSplitError!i32 {
     return self.commandSlices(arguments);
 }
 
-pub fn commandPointers(self: *TiZr80, arguments: [*:null]const ?[*:0]const u8) CommandError!i32 {
+pub fn commandPointers(self: *TiZr80, arguments: [*:null]const ?[*:0]const u8) Commands.Error!i32 {
     const slices = try self.allocator.alloc([:0]const u8, std.mem.len(arguments));
     defer self.allocator.free(slices);
     for (slices) |*slice, index| slice.* = std.mem.span(arguments[index].?);
     return self.commandSlices(slices);
 }
 
-pub fn commandSlices(self: *TiZr80, arguments: []const [:0]const u8) CommandError!i32 {
-    if (arguments.len == 0) return CommandError.InvalidCommand;
-    if (std.mem.eql(u8, arguments[0], "load")) {
-        if (arguments.len != 3) return CommandError.InvalidCommand;
-        if (std.mem.eql(u8, arguments[1], "rom")) {
-            const file = try std.fs.cwd().openFileZ(arguments[2], .{});
-            defer file.close();
+pub fn commandSlices(self: *TiZr80, arguments: []const [:0]const u8) Commands.Error!i32 {
+    if (self.sync) |*sync| sync.enter();
+    defer if (self.sync) |*sync| sync.leave();
 
-            return @boolToInt(try file.readAll(self.mem.flash) < self.mem.flash.len);
-        }
-    } else if (std.mem.eql(u8, arguments[0], "save")) {
-        if (arguments.len != 3) return CommandError.InvalidCommand;
-        if (std.mem.eql(u8, arguments[1], "rom")) {
-            const file = try std.fs.cwd().createFileZ(arguments[2], .{});
-            defer file.close();
-
-            try file.writeAll(self.mem.flash);
-            return 0;
-        }
-    }
-    return CommandError.InvalidCommand;
+    return self.commands.run(arguments);
 }
 
 pub fn runLoop(self: *TiZr80) void {
