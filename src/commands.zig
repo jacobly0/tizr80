@@ -146,10 +146,10 @@ pub const Command = union(enum) {
     }
 };
 
-root: Command = .{ .group = .{} },
+root: Command,
 
 pub fn init(self: *Commands, allocator: std.mem.Allocator) !void {
-    self.* = .{};
+    self.* = .{ .root = .{ .group = .{} } };
 
     const root_group = &self.root.group;
     errdefer root_group.deinit(allocator);
@@ -242,6 +242,6 @@ fn testInit(allocator: std.mem.Allocator) !void {
     try commands.init(allocator);
     defer commands.deinit(allocator);
 }
-test "init" {
+test "commands init" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, testInit, .{});
 }

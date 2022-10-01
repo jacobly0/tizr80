@@ -31,6 +31,7 @@ pub fn init(self: *Ports, allocator: std.mem.Allocator) !void {
         .dummy = .{},
         .handlers = .{&self.dummy.handler} ** self.handlers.len,
     };
+    errdefer self.deinit(allocator);
 
     self.handlers[0x0] = try Port0.create(allocator);
     self.handlers[0x1] = try Flash.create(allocator);

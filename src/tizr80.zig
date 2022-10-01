@@ -311,20 +311,26 @@ fn keypad(self: *TiZr80) *Keypad {
     return @fieldParentPtr(Keypad, "handler", self.ports.handlers[0xA]);
 }
 
-test "create" {
-    const core = try TiZr80.create(.{ .allocator = std.testing.allocator });
+fn testCreate(allocator: std.mem.Allocator) !void {
+    const core = try TiZr80.create(.{ .allocator = allocator });
     defer core.destroy();
 }
-
-test "init" {
-    const core = try std.testing.allocator.create(TiZr80);
-    defer std.testing.allocator.destroy(core);
-
-    try core.init(.{ .allocator = std.testing.allocator });
-    defer core.deinit();
+test "tizr80 create" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, testCreate, .{});
 }
 
-test "sleep/wake" {
+fn testInit(allocator: std.mem.Allocator) !void {
+    const core = try allocator.create(TiZr80);
+    defer allocator.destroy(core);
+
+    try core.init(.{ .allocator = allocator });
+    defer core.deinit();
+}
+test "tizr80 init" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, testInit, .{});
+}
+
+test "tizr80 sleep/wake" {
     const core = try TiZr80.create(.{ .allocator = std.testing.allocator });
     defer core.destroy();
 
@@ -335,7 +341,7 @@ test "sleep/wake" {
     try std.testing.expect(!core.sleep());
 }
 
-test "single threaded" {
+test "tizr80 single threaded" {
     const core = try TiZr80.create(.{ .allocator = std.testing.allocator, .threading = .SingleThreaded });
     defer core.destroy();
 }
