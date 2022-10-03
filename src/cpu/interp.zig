@@ -38,15 +38,22 @@ fn execute(backend: *Cpu.Backend, cpu: *Cpu, mode: Cpu.ExecuteMode) void {
         state.dump();
     }
     if (mode == .flush) return;
-    execute: while (!self.halted) {
-        decode.Decoder(*State).decode(&state) catch |err|
-            std.debug.assert(@errSetCast(State.Error, err) == State.Error.ConditionFailed);
+    while (!self.halted) {
+        if (cpu.ief1) {
+            const interrupt = cpu.core().ports.interrupt;
+            if (interrupt.active & interrupt.enable != 0)
+                try state.interrupt();
+        }
+        decode.Decoder(*State).decode(&state) catch |err| switch (err) {
+            State.Error.ConditionFailed => {},
+            else => unreachable,
+        };
         if (backend.flush) {
             backend.flush = false;
             state.fetchByte(.prefetch) catch unreachable;
         }
         state.dump();
-        if (mode == .step) break :execute;
+        if (mode == .step) break;
         std.debug.assert(mode == .run);
     }
 }

@@ -1,32 +1,24 @@
 const std = @import("std");
 
 const Interrupt = @This();
-const Ports = @import("../ports.zig");
-const TiZr80 = @import("../tizr80.zig");
 const util = @import("../util.zig");
 
-handler: Ports.Handler,
+active: u22,
 enable: u22,
 latch: u22,
 
-pub fn create(allocator: std.mem.Allocator) !*Ports.Handler {
-    const self = try allocator.create(Interrupt);
-    errdefer allocator.destroy(self);
-
+pub fn init(self: *Interrupt, _: std.mem.Allocator) std.mem.Allocator.Error!void {
     self.* = .{
-        .handler = .{ .read = read, .write = write, .destroy = destroy },
+        .active = 0,
         .enable = 0,
         .latch = 0,
     };
-    return &self.handler;
 }
-fn destroy(handler: *Ports.Handler, allocator: std.mem.Allocator) void {
-    const self = @fieldParentPtr(Interrupt, "handler", handler);
-    allocator.destroy(self);
+pub fn deinit(self: *Interrupt, _: std.mem.Allocator) void {
+    self.* = undefined;
 }
 
-fn read(_: *TiZr80, handler: *Ports.Handler, address: u12, cycles: *u64) u8 {
-    const self = @fieldParentPtr(Interrupt, "handler", handler);
+pub fn read(self: *Interrupt, address: u12, cycles: *u64) u8 {
     cycles.* +%= 3;
     return switch (@truncate(u8, address)) {
         0x04 => util.bit.extract(self.enable, u8, 0),
@@ -40,8 +32,7 @@ fn read(_: *TiZr80, handler: *Ports.Handler, address: u12, cycles: *u64) u8 {
         else => std.debug.todo("Interrupt port read unimplemented"),
     };
 }
-fn write(_: *TiZr80, handler: *Ports.Handler, address: u12, value: u8, cycles: *u64) void {
-    const self = @fieldParentPtr(Interrupt, "handler", handler);
+pub fn write(self: *Interrupt, address: u12, value: u8, cycles: *u64) void {
     cycles.* +%= 3;
     switch (@truncate(u8, address)) {
         0x04 => util.bit.insert(&self.enable, value, 0),

@@ -130,7 +130,7 @@ int main(int argc, char *argv[]) {
 
     test_memory(core);
 
-    expect(-EINVAL == tizr80_command(core, (const char *[]){NULL}));
+    expect(1 == tizr80_command(core, (const char *[]){NULL}));
 
     uint8_t program[] = {0x00, 0x41, 0x53, 0x69, 0x7B, 0x76, 0x18, -2};
     for (uint32_t address = 0; address != sizeof(program); ++address)

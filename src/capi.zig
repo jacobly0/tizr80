@@ -364,6 +364,7 @@ fn wrapCommandResult(result: TiZr80.CommandSplitError!i32) c_int {
         error.InvalidEscape,
         error.UnterminatedString,
         error.InvalidCommand,
+        error.InvalidArguments,
         error.BadPathName,
         error.InvalidUtf8,
         => std.c.E.INVAL,

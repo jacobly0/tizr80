@@ -1,8 +1,6 @@
 const std = @import("std");
 
 const Keypad = @This();
-const Ports = @import("../ports.zig");
-const TiZr80 = @import("../tizr80.zig");
 const util = @import("../util.zig");
 
 pub const Key = packed struct(u8) {
@@ -10,37 +8,26 @@ pub const Key = packed struct(u8) {
     row: u4,
 };
 
-handler: Ports.Handler,
 keys: [16]u16,
 events: [16][2]std.atomic.Atomic(u16),
 
-pub fn create(allocator: std.mem.Allocator) !*Ports.Handler {
-    const self = try allocator.create(Keypad);
-    errdefer allocator.destroy(self);
-
+pub fn init(self: *Keypad, _: std.mem.Allocator) std.mem.Allocator.Error!void {
     self.* = .{
-        .handler = .{ .read = read, .write = write, .destroy = destroy },
         .keys = .{0} ** self.keys.len,
         .events = .{.{.{ .value = 0 }} ** self.events[0].len} ** self.events.len,
     };
-    return &self.handler;
 }
-fn destroy(handler: *Ports.Handler, allocator: std.mem.Allocator) void {
-    const self = @fieldParentPtr(Keypad, "handler", handler);
-    allocator.destroy(self);
+pub fn deinit(self: *Keypad, _: std.mem.Allocator) void {
+    self.* = undefined;
 }
 
-fn read(_: *TiZr80, handler: *Ports.Handler, address: u12, cycles: *u64) u8 {
-    const self = @fieldParentPtr(Keypad, "handler", handler);
-    _ = .{self};
+pub fn read(_: *Keypad, address: u12, cycles: *u64) u8 {
     cycles.* +%= 3;
     return switch (@truncate(u7, address)) {
         else => std.debug.todo("Keypad port read unimplemented"),
     };
 }
-fn write(_: *TiZr80, handler: *Ports.Handler, address: u12, value: u8, cycles: *u64) void {
-    const self = @fieldParentPtr(Keypad, "handler", handler);
-    _ = .{ self, value };
+pub fn write(_: *Keypad, address: u12, _: u8, cycles: *u64) void {
     cycles.* +%= 3;
     switch (@truncate(u7, address)) {
         0x0...0x5 => {},

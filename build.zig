@@ -19,6 +19,7 @@ pub fn build(b: *std.build.Builder) !void {
     ) orelse true;
     const strip = b.option(bool, "strip", "Omit debug symbols. (default: false)") orelse false;
     const test_filter = b.option([]const u8, "test-filter", "Skip tests that do not match filter.");
+    b.verbose = b.option(bool, "verbose", "Verbose build output. (default: false)") orelse false;
 
     if (mode != .Debug and debug_mode) {
         std.log.err("Both debug (-Ddebug) and release (of -Drelease-safe, " ++

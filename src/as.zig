@@ -106,7 +106,7 @@ const Rule = struct {
 
 allocator: std.mem.Allocator,
 tokenizer: Tokenizer,
-fixups: std.ArrayListUnmanaged(Fixup) = .{},
+fixups: std.SegmentedList(Fixup, 0) = .{},
 output: std.ArrayListUnmanaged(u8) = .{},
 origin: u24 = 0,
 adl: Mode = .{ .inst = .l, .imm = .il },
@@ -2688,7 +2688,7 @@ test "as" {
     defer std.testing.allocator.free(actual);
     try std.testing.expectEqualSlices(u8, expected, actual);
 
-    std.debug.print("\n{} ns\n", .{timer.read()});
+    if (false) std.debug.print("\n{} ns\n", .{timer.read()});
 }
 
 test {

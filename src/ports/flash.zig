@@ -2,40 +2,30 @@ const std = @import("std");
 
 const Flash = @This();
 const Ports = @import("../ports.zig");
-const TiZr80 = @import("../tizr80.zig");
 
-handler: Ports.Handler,
-
-pub fn create(allocator: std.mem.Allocator) !*Ports.Handler {
-    const self = try allocator.create(Flash);
-    errdefer allocator.destroy(self);
-
-    self.* = .{
-        .handler = .{ .read = read, .write = write, .destroy = destroy },
-    };
-    return &self.handler;
+pub fn init(self: *Flash, _: std.mem.Allocator) std.mem.Allocator.Error!void {
+    self.* = .{};
 }
-fn destroy(handler: *Ports.Handler, allocator: std.mem.Allocator) void {
-    const self = @fieldParentPtr(Flash, "handler", handler);
-    allocator.destroy(self);
+pub fn deinit(self: *Flash, _: std.mem.Allocator) void {
+    self.* = undefined;
 }
 
-fn read(core: *TiZr80, handler: *Ports.Handler, address: u12, cycles: *u64) u8 {
-    const self = @fieldParentPtr(Flash, "handler", handler);
-    _ = self;
+fn ports(self: *Flash) *Ports {
+    return @fieldParentPtr(Ports, "flash", self);
+}
+
+pub fn read(self: *Flash, address: u12, cycles: *u64) u8 {
     cycles.* +%= 2;
     return switch (@truncate(u8, address)) {
-        0x05 => @intCast(u8, core.mem.flash_wait_states - 6),
+        0x05 => @intCast(u8, self.ports().core().mem.flash_wait_states - 6),
         else => std.debug.todo("Flash port read unimplemented"),
     };
 }
-fn write(core: *TiZr80, handler: *Ports.Handler, address: u12, value: u8, cycles: *u64) void {
-    const self = @fieldParentPtr(Flash, "handler", handler);
-    _ = self;
+pub fn write(self: *Flash, address: u12, value: u8, cycles: *u64) void {
     cycles.* +%= 2;
     switch (@truncate(u8, address)) {
         0x02 => {},
-        0x05 => core.mem.flash_wait_states = 6 + value,
+        0x05 => self.ports().core().mem.flash_wait_states = 6 + value,
         else => std.debug.todo("Flash port write unimplemented"),
     }
 }

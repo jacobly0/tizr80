@@ -1,33 +1,23 @@
 const std = @import("std");
 
 const Lcd = @This();
-const Ports = @import("../ports.zig");
-const TiZr80 = @import("../tizr80.zig");
 
-handler: Ports.Handler,
 base: [8]u8,
 control: [4]u8,
 cursor: [0x400]u8,
 
-pub fn create(allocator: std.mem.Allocator) !*Ports.Handler {
-    const self = try allocator.create(Lcd);
-    errdefer allocator.destroy(self);
-
+pub fn init(self: *Lcd, _: std.mem.Allocator) std.mem.Allocator.Error!void {
     self.* = .{
-        .handler = .{ .read = read, .write = write, .destroy = destroy },
         .base = .{0} ** self.base.len,
         .control = .{0} ** self.control.len,
         .cursor = .{0} ** self.cursor.len,
     };
-    return &self.handler;
 }
-fn destroy(handler: *Ports.Handler, allocator: std.mem.Allocator) void {
-    const self = @fieldParentPtr(Lcd, "handler", handler);
-    allocator.destroy(self);
+pub fn deinit(self: *Lcd, _: std.mem.Allocator) void {
+    self.* = undefined;
 }
 
-fn read(_: *TiZr80, handler: *Ports.Handler, address: u12, cycles: *u64) u8 {
-    const self = @fieldParentPtr(Lcd, "handler", handler);
+pub fn read(self: *Lcd, address: u12, cycles: *u64) u8 {
     cycles.* +%= 3;
     return switch (@truncate(u12, address)) {
         0x010...0x017 => |addr| self.base[addr - 0x010],
@@ -36,8 +26,7 @@ fn read(_: *TiZr80, handler: *Ports.Handler, address: u12, cycles: *u64) u8 {
         else => std.debug.todo("Lcd port read unimplemented"),
     };
 }
-fn write(_: *TiZr80, handler: *Ports.Handler, address: u12, value: u8, cycles: *u64) void {
-    const self = @fieldParentPtr(Lcd, "handler", handler);
+pub fn write(self: *Lcd, address: u12, value: u8, cycles: *u64) void {
     cycles.* +%= 2;
     switch (@truncate(u12, address)) {
         0x000...0x00F => {},

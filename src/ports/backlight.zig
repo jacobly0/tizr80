@@ -1,36 +1,21 @@
 const std = @import("std");
 
 const Backlight = @This();
-const Ports = @import("../ports.zig");
-const TiZr80 = @import("../tizr80.zig");
 
-handler: Ports.Handler,
-
-pub fn create(allocator: std.mem.Allocator) !*Ports.Handler {
-    const self = try allocator.create(Backlight);
-    errdefer allocator.destroy(self);
-
-    self.* = .{
-        .handler = .{ .read = read, .write = write, .destroy = destroy },
-    };
-    return &self.handler;
+pub fn init(self: *Backlight, _: std.mem.Allocator) std.mem.Allocator.Error!void {
+    self.* = .{};
 }
-fn destroy(handler: *Ports.Handler, allocator: std.mem.Allocator) void {
-    const self = @fieldParentPtr(Backlight, "handler", handler);
-    allocator.destroy(self);
+pub fn deinit(self: *Backlight, _: std.mem.Allocator) void {
+    self.* = undefined;
 }
 
-fn read(_: *TiZr80, handler: *Ports.Handler, address: u12, cycles: *u64) u8 {
-    const self = @fieldParentPtr(Backlight, "handler", handler);
-    _ = self;
+pub fn read(_: *Backlight, address: u12, cycles: *u64) u8 {
     cycles.* +%= 3;
     return switch (@truncate(u12, address)) {
         else => std.debug.todo("Backlight port read unimplemented"),
     };
 }
-fn write(_: *TiZr80, handler: *Ports.Handler, address: u12, value: u8, cycles: *u64) void {
-    const self = @fieldParentPtr(Backlight, "handler", handler);
-    _ = .{ self, value };
+pub fn write(_: *Backlight, address: u12, _: u8, cycles: *u64) void {
     cycles.* +%= 3;
     switch (@truncate(u12, address)) {
         0x020...0x026 => {},

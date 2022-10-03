@@ -1,38 +1,28 @@
 const std = @import("std");
 
 const Port0 = @This();
-const Ports = @import("../ports.zig");
-const TiZr80 = @import("../tizr80.zig");
 const util = @import("../util.zig");
 
-handler: Ports.Handler,
 port_access: u7,
 gpio: [6]u8,
 power: u4,
 region: [9]u8,
 stack_protector: [3]u8,
 
-pub fn create(allocator: std.mem.Allocator) !*Ports.Handler {
-    const self = try allocator.create(Port0);
-    errdefer allocator.destroy(self);
-
+pub fn init(self: *Port0, _: std.mem.Allocator) std.mem.Allocator.Error!void {
     self.* = .{
-        .handler = .{ .read = read, .write = write, .destroy = destroy },
         .port_access = 0,
         .gpio = .{0} ** self.gpio.len,
         .power = 0,
         .region = .{0} ** self.region.len,
         .stack_protector = .{0} ** self.stack_protector.len,
     };
-    return &self.handler;
 }
-fn destroy(handler: *Ports.Handler, allocator: std.mem.Allocator) void {
-    const self = @fieldParentPtr(Port0, "handler", handler);
-    allocator.destroy(self);
+pub fn deinit(self: *Port0, _: std.mem.Allocator) void {
+    self.* = undefined;
 }
 
-fn read(_: *TiZr80, handler: *Ports.Handler, address: u12, cycles: *u64) u8 {
-    const self = @fieldParentPtr(Port0, "handler", handler);
+pub fn read(self: *Port0, address: u12, cycles: *u64) u8 {
     cycles.* +%= 2;
     return switch (@truncate(u8, address)) {
         0x02 => 0,
@@ -45,8 +35,7 @@ fn read(_: *TiZr80, handler: *Ports.Handler, address: u12, cycles: *u64) u8 {
         else => std.debug.todo("Port0 port read unimplemented"),
     };
 }
-fn write(_: *TiZr80, handler: *Ports.Handler, address: u12, value: u8, cycles: *u64) void {
-    const self = @fieldParentPtr(Port0, "handler", handler);
+pub fn write(self: *Port0, address: u12, value: u8, cycles: *u64) void {
     cycles.* +%= 2;
     switch (@truncate(u8, address)) {
         0x00, 0x01, 0x06 => {},
@@ -57,4 +46,9 @@ fn write(_: *TiZr80, handler: *Ports.Handler, address: u12, value: u8, cycles: *
         0x3A...0x3C => |addr| self.stack_protector[addr - 0x3A] = value,
         else => std.debug.todo("Port0 port write unimplemented"),
     }
+}
+
+test {
+    _ = read;
+    _ = write;
 }

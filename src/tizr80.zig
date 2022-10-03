@@ -183,7 +183,7 @@ fn getRaw(self: *TiZr80, property: Property.Key) ?u24 {
     return switch (property) {
         .register => |id| self.cpu.getAny(id),
         .shadow_register => |id| self.cpu.getAnyShadow(id),
-        .key => |key| self.keypad().getKey(key),
+        .key => |key| self.ports.keypad.getKey(key),
         .flash => |address| self.mem.peek(address),
         .ram => |address| self.mem.peek(Memory.ram_start + @as(u24, address)),
         .port => |address| self.ports.peek(address),
@@ -228,7 +228,7 @@ fn setRaw(self: *TiZr80, property: Property.Key, value: ?u24) void {
     switch (property) {
         .register => |id| self.cpu.setAny(id, value.?),
         .shadow_register => |id| self.cpu.setAnyShadow(id, value.?),
-        .key => |key| self.keypad().setKey(key, @intCast(u1, value.?)),
+        .key => |key| self.ports.keypad.setKey(key, @intCast(u1, value.?)),
         .ram => |address| self.mem.poke(Memory.ram_start + @as(u24, address), @intCast(u8, value.?)),
         .port => |address| self.ports.poke(address, @intCast(u8, value.?)),
         else => std.debug.todo("unimplemented"),
@@ -307,18 +307,10 @@ pub fn wake(self: *TiZr80) bool {
     return if (self.sync) |*sync| sync.wake() else false;
 }
 
-fn keypad(self: *TiZr80) *Keypad {
-    return @fieldParentPtr(Keypad, "handler", self.ports.handlers[0xA]);
-}
-
 fn testCreate(allocator: std.mem.Allocator) !void {
     const core = try TiZr80.create(.{ .allocator = allocator });
     defer core.destroy();
 }
-test "tizr80 create" {
-    try std.testing.checkAllAllocationFailures(std.testing.allocator, testCreate, .{});
-}
-
 fn testInit(allocator: std.mem.Allocator) !void {
     const core = try allocator.create(TiZr80);
     defer allocator.destroy(core);
@@ -326,7 +318,12 @@ fn testInit(allocator: std.mem.Allocator) !void {
     try core.init(.{ .allocator = allocator });
     defer core.deinit();
 }
-test "tizr80 init" {
+test "tizr80 create/init" {
+    try testCreate(std.testing.allocator);
+    try testInit(std.testing.allocator);
+}
+test "tizr80 create/init allocation failures" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, testCreate, .{});
     try std.testing.checkAllAllocationFailures(std.testing.allocator, testInit, .{});
 }
 
