@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const Lcd = @This();
+const util = @import("../util.zig");
 
 base: [8]u8,
 control: [4]u8,
@@ -23,7 +24,7 @@ pub fn read(self: *Lcd, address: u12, cycles: *u64) u8 {
         0x010...0x017 => |addr| self.base[addr - 0x010],
         0x018...0x01B => |addr| self.control[addr - 0x018],
         0x800...0xBFF => |addr| self.cursor[addr - 0x800],
-        else => std.debug.todo("Lcd port read unimplemented"),
+        else => util.todo("Lcd port read unimplemented"),
     };
 }
 pub fn write(self: *Lcd, address: u12, value: u8, cycles: *u64) void {
@@ -33,6 +34,6 @@ pub fn write(self: *Lcd, address: u12, value: u8, cycles: *u64) void {
         0x010...0x017 => |addr| self.base[addr - 0x010] = value,
         0x018...0x01B => |addr| self.control[addr - 0x018] = value,
         0x800...0xBFF => |addr| self.cursor[addr - 0x800] = value,
-        else => std.debug.todo("Lcd port write unimplemented"),
+        else => util.todo("Lcd port write unimplemented"),
     }
 }

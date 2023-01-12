@@ -629,16 +629,15 @@ const State = struct {
         const high_offset: u4 = if (self.cpu.cf) 0x10 - 0xA else 0;
 
         const offset = util.bit.concat(.{ high_offset, low_offset });
-        var result: u8 = undefined;
-        var low_result: u4 = undefined;
-        if (self.cpu.nf) {
-            result = byte -% offset;
-            self.cpu.hc = @subWithOverflow(u4, low, low_offset, &low_result);
-        } else {
-            result = byte +% offset;
-            self.cpu.hc = @addWithOverflow(u4, low, low_offset, &low_result);
-        }
-        self.accumulator = result;
+        const result = if (self.cpu.nf) .{
+            .full = byte -% offset,
+            .half = @subWithOverflow(low, low_offset),
+        } else .{
+            .full = byte +% offset,
+            .half = @addWithOverflow(low, low_offset),
+        };
+        self.cpu.hc = result.half[1] != 0;
+        self.accumulator = result.full;
     }
     pub fn cplByte(self: *State) error{}!void {
         self.cpu.nf = true;
@@ -686,17 +685,17 @@ const State = struct {
         self.cpu.nf = signed_rhs < 0;
 
         const signed_lhs = @bitCast(i8, unsigned_lhs);
-        var signed_result: i8 = undefined;
-        self.cpu.pv = @addWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
+        const signed_result = @addWithOverflow(signed_lhs, signed_rhs);
+        self.cpu.pv = signed_result[1] != 0;
 
         const low_lhs = util.bit.extract(unsigned_lhs, u4, 0);
         const low_rhs = util.bit.extract(unsigned_rhs, u4, 0);
-        var low_result: u4 = undefined;
-        self.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) != self.cpu.nf;
+        const low_result = @addWithOverflow(low_lhs, low_rhs);
+        self.cpu.hc = low_result[1] ^ @boolToInt(self.cpu.nf) != 0;
 
-        self.cpu.zf = signed_result == 0;
-        self.cpu.sf = signed_result < 0;
-        self.accumulator = @bitCast(u8, signed_result);
+        self.cpu.zf = signed_result[0] == 0;
+        self.cpu.sf = signed_result[0] < 0;
+        self.accumulator = @bitCast(u8, signed_result[0]);
     }
     pub fn addByteHalfZeroSign(self: *State, comptime rhs: comptime_int) error{}!void {
         const unsigned_lhs = @intCast(u8, self.accumulator);
@@ -708,8 +707,8 @@ const State = struct {
 
         const low_lhs = util.bit.extract(unsigned_lhs, u4, 0);
         const low_rhs = util.bit.extract(unsigned_rhs, u4, 0);
-        var low_result: u4 = undefined;
-        self.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) != (rhs < 0);
+        const low_result = @addWithOverflow(low_lhs, low_rhs);
+        self.cpu.hc = low_result[1] ^ @boolToInt(rhs < 0) != 0;
 
         self.cpu.zf = unsigned_result == 0;
         self.cpu.sf = @bitCast(i8, unsigned_result) < 0;
@@ -734,98 +733,100 @@ const State = struct {
     pub fn addBytes(self: *State) error{}!void {
         const unsigned_lhs = @intCast(u8, self.accumulator);
         const unsigned_rhs = @intCast(u8, self.address);
-        var unsigned_result: u8 = undefined;
-        self.cpu.cf = @addWithOverflow(u8, unsigned_lhs, unsigned_rhs, &unsigned_result);
+        const unsigned_result = @addWithOverflow(unsigned_lhs, unsigned_rhs);
+        self.cpu.cf = unsigned_result[1] != 0;
 
         self.cpu.nf = false;
 
         const signed_lhs = @bitCast(i8, unsigned_lhs);
         const signed_rhs = @bitCast(i8, unsigned_rhs);
-        var signed_result: i8 = undefined;
-        self.cpu.pv = @addWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
+        const signed_result = @addWithOverflow(signed_lhs, signed_rhs);
+        self.cpu.pv = signed_result[1] != 0;
 
         const low_lhs = util.bit.extract(unsigned_lhs, u4, 0);
         const low_rhs = util.bit.extract(unsigned_rhs, u4, 0);
-        var low_result: u4 = undefined;
-        self.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result);
+        const low_result = @addWithOverflow(low_lhs, low_rhs);
+        self.cpu.hc = low_result[1] != 0;
 
-        self.cpu.zf = unsigned_result == 0;
-        self.cpu.sf = signed_result < 0;
-        self.accumulator = unsigned_result;
+        self.cpu.zf = unsigned_result[0] == 0;
+        self.cpu.sf = signed_result[0] < 0;
+        self.accumulator = unsigned_result[0];
     }
     pub fn adcBytes(self: *State) error{}!void {
         const carry = @boolToInt(self.cpu.cf);
 
         const unsigned_lhs = @intCast(u8, self.accumulator);
         const unsigned_rhs = @intCast(u8, self.address);
-        var unsigned_result: u8 = undefined;
-        const cf = @addWithOverflow(u8, unsigned_lhs, unsigned_rhs, &unsigned_result);
-        self.cpu.cf = @addWithOverflow(u8, unsigned_result, carry, &unsigned_result) or cf;
+        const partial_unsigned_result = @addWithOverflow(unsigned_lhs, unsigned_rhs);
+        const unsigned_result = @addWithOverflow(partial_unsigned_result[0], carry);
+        self.cpu.cf = partial_unsigned_result[1] ^ unsigned_result[1] != 0;
 
         self.cpu.nf = false;
 
         const signed_lhs = @bitCast(i8, unsigned_lhs);
         const signed_rhs = @bitCast(i8, unsigned_rhs);
-        const signed_result = @bitCast(i8, unsigned_result);
-        self.cpu.pv = @as(i9, signed_lhs) + signed_rhs + carry != signed_result;
+        const partial_signed_result = @addWithOverflow(signed_lhs, signed_rhs);
+        const signed_result = @addWithOverflow(partial_signed_result[0], carry);
+        self.cpu.pv = partial_signed_result[1] ^ signed_result[1] != 0;
 
         const low_lhs = util.bit.extract(unsigned_lhs, u4, 0);
         const low_rhs = util.bit.extract(unsigned_rhs, u4, 0);
-        var low_result: u4 = undefined;
-        self.cpu.hc = @addWithOverflow(u4, low_lhs, low_rhs, &low_result) or
-            @addWithOverflow(u4, low_result, carry, &low_result);
+        const partial_low_result = @addWithOverflow(low_lhs, low_rhs);
+        const low_result = @addWithOverflow(partial_low_result[0], carry);
+        self.cpu.hc = partial_low_result[1] ^ low_result[1] != 0;
 
-        self.cpu.zf = unsigned_result == 0;
-        self.cpu.sf = signed_result < 0;
-        self.accumulator = unsigned_result;
+        self.cpu.zf = unsigned_result[0] == 0;
+        self.cpu.sf = signed_result[0] < 0;
+        self.accumulator = unsigned_result[0];
     }
     pub fn subBytes(self: *State) error{}!void {
         const unsigned_lhs = @intCast(u8, self.accumulator);
         const unsigned_rhs = @intCast(u8, self.address);
-        var unsigned_result: u8 = undefined;
-        self.cpu.cf = @subWithOverflow(u8, unsigned_lhs, unsigned_rhs, &unsigned_result);
+        const unsigned_result = @subWithOverflow(unsigned_lhs, unsigned_rhs);
+        self.cpu.cf = unsigned_result[1] != 0;
 
         self.cpu.nf = true;
 
         const signed_lhs = @bitCast(i8, unsigned_lhs);
         const signed_rhs = @bitCast(i8, unsigned_rhs);
-        var signed_result: i8 = undefined;
-        self.cpu.pv = @subWithOverflow(i8, signed_lhs, signed_rhs, &signed_result);
+        const signed_result = @subWithOverflow(signed_lhs, signed_rhs);
+        self.cpu.pv = signed_result[1] != 0;
 
         const low_lhs = util.bit.extract(unsigned_lhs, u4, 0);
         const low_rhs = util.bit.extract(unsigned_rhs, u4, 0);
-        var low_result: u4 = undefined;
-        self.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result);
+        const low_result = @subWithOverflow(low_lhs, low_rhs);
+        self.cpu.hc = low_result[1] != 0;
 
-        self.cpu.zf = unsigned_result == 0;
-        self.cpu.sf = signed_result < 0;
-        self.accumulator = unsigned_result;
+        self.cpu.zf = unsigned_result[0] == 0;
+        self.cpu.sf = signed_result[0] < 0;
+        self.accumulator = unsigned_result[0];
     }
     pub fn sbcBytes(self: *State) error{}!void {
         const carry = @boolToInt(self.cpu.cf);
 
         const unsigned_lhs = @intCast(u8, self.accumulator);
         const unsigned_rhs = @intCast(u8, self.address);
-        var unsigned_result: u8 = undefined;
-        const cf = @subWithOverflow(u8, unsigned_lhs, unsigned_rhs, &unsigned_result);
-        self.cpu.cf = @subWithOverflow(u8, unsigned_result, carry, &unsigned_result) or cf;
+        const partial_unsigned_result = @subWithOverflow(unsigned_lhs, unsigned_rhs);
+        const unsigned_result = @subWithOverflow(partial_unsigned_result[0], carry);
+        self.cpu.cf = partial_unsigned_result[1] ^ unsigned_result[1] != 0;
 
         self.cpu.nf = true;
 
         const signed_lhs = @bitCast(i8, unsigned_lhs);
         const signed_rhs = @bitCast(i8, unsigned_rhs);
-        const signed_result = @bitCast(i8, unsigned_result);
-        self.cpu.pv = @as(i9, signed_lhs) - signed_rhs - carry != signed_result;
+        const partial_signed_result = @subWithOverflow(signed_lhs, signed_rhs);
+        const signed_result = @subWithOverflow(partial_signed_result[0], carry);
+        self.cpu.pv = partial_signed_result[1] ^ signed_result[1] != 0;
 
         const low_lhs = util.bit.extract(unsigned_lhs, u4, 0);
         const low_rhs = util.bit.extract(unsigned_rhs, u4, 0);
-        var low_result: u4 = undefined;
-        self.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result) or
-            @subWithOverflow(u4, low_result, carry, &low_result);
+        const partial_low_result = @subWithOverflow(low_lhs, low_rhs);
+        const low_result = @subWithOverflow(partial_low_result[0], carry);
+        self.cpu.hc = partial_low_result[1] ^ low_result[1] != 0;
 
-        self.cpu.zf = unsigned_result == 0;
-        self.cpu.sf = signed_result < 0;
-        self.accumulator = unsigned_result;
+        self.cpu.zf = unsigned_result[0] == 0;
+        self.cpu.sf = signed_result[0] < 0;
+        self.accumulator = unsigned_result[0];
     }
     pub fn andBytes(self: *State) error{}!void {
         const lhs = @intCast(u8, self.accumulator);
@@ -895,17 +896,17 @@ const State = struct {
 
         const unsigned_lhs = util.bit.extract(@intCast(u24, self.accumulator), UnsignedInt, 0);
         const unsigned_rhs = util.bit.extract(@intCast(u24, self.address), UnsignedInt, 0);
-        var unsigned_result: UnsignedInt = undefined;
-        self.cpu.cf = @addWithOverflow(UnsignedInt, unsigned_lhs, unsigned_rhs, &unsigned_result);
+        const unsigned_result = @addWithOverflow(unsigned_lhs, unsigned_rhs);
+        self.cpu.cf = unsigned_result[1] != 0;
 
         self.cpu.nf = false;
 
         const low_lhs = util.bit.extract(unsigned_lhs, u12, 0);
         const low_rhs = util.bit.extract(unsigned_rhs, u12, 0);
-        var low_result: u12 = undefined;
-        self.cpu.hc = @addWithOverflow(u12, low_lhs, low_rhs, &low_result);
+        const low_result = @addWithOverflow(low_lhs, low_rhs);
+        self.cpu.hc = low_result[1] != 0;
 
-        self.accumulator = unsigned_result;
+        self.accumulator = unsigned_result[0];
     }
     pub fn addWords(self: *State) error{}!void {
         switch (self.mode.inst) {
@@ -921,28 +922,27 @@ const State = struct {
 
         const unsigned_lhs = util.bit.extract(@intCast(u24, self.accumulator), UnsignedInt, 0);
         const unsigned_rhs = util.bit.extract(@intCast(u24, self.address), UnsignedInt, 0);
-        var unsigned_result: UnsignedInt = undefined;
-        const cf = @addWithOverflow(UnsignedInt, unsigned_lhs, unsigned_rhs, &unsigned_result);
-        self.cpu.cf = @addWithOverflow(UnsignedInt, unsigned_result, carry, &unsigned_result) or cf;
+        const partial_unsigned_result = @addWithOverflow(unsigned_lhs, unsigned_rhs);
+        const unsigned_result = @addWithOverflow(partial_unsigned_result[0], carry);
+        self.cpu.cf = partial_unsigned_result[1] ^ unsigned_result[1] != 0;
 
         self.cpu.nf = false;
 
         const signed_lhs = @bitCast(SignedInt, unsigned_lhs);
         const signed_rhs = @bitCast(SignedInt, unsigned_rhs);
-        const signed_result = @bitCast(SignedInt, unsigned_result);
-        self.cpu.pv = @as(std.meta.Int(.signed, width + 1), signed_lhs) + signed_rhs + carry !=
-            signed_result;
+        const partial_signed_result = @addWithOverflow(signed_lhs, signed_rhs);
+        const signed_result = @addWithOverflow(partial_signed_result[0], carry);
+        self.cpu.pv = partial_signed_result[1] ^ signed_result[1] != 0;
 
         const low_lhs = util.bit.extract(unsigned_lhs, u12, 0);
         const low_rhs = util.bit.extract(unsigned_rhs, u12, 0);
-        var low_result: u12 = undefined;
-        self.cpu.hc = @addWithOverflow(u12, low_lhs, low_rhs, &low_result) or
-            @addWithOverflow(u12, low_result, carry, &low_result);
+        const partial_low_result = @addWithOverflow(low_lhs, low_rhs);
+        const low_result = @addWithOverflow(partial_low_result[0], carry);
+        self.cpu.hc = partial_low_result[1] ^ low_result[1] != 0;
 
-        self.cpu.zf = unsigned_result == 0;
-        self.cpu.sf = signed_result < 0;
-
-        self.accumulator = unsigned_result;
+        self.cpu.zf = unsigned_result[0] == 0;
+        self.cpu.sf = signed_result[0] < 0;
+        self.accumulator = unsigned_result[0];
     }
     pub fn adcWords(self: *State) error{}!void {
         switch (self.mode.inst) {
@@ -958,28 +958,27 @@ const State = struct {
 
         const unsigned_lhs = util.bit.extract(@intCast(u24, self.accumulator), UnsignedInt, 0);
         const unsigned_rhs = util.bit.extract(@intCast(u24, self.address), UnsignedInt, 0);
-        var unsigned_result: UnsignedInt = undefined;
-        const cf = @subWithOverflow(UnsignedInt, unsigned_lhs, unsigned_rhs, &unsigned_result);
-        self.cpu.cf = @subWithOverflow(UnsignedInt, unsigned_result, carry, &unsigned_result) or cf;
+        const partial_unsigned_result = @subWithOverflow(unsigned_lhs, unsigned_rhs);
+        const unsigned_result = @subWithOverflow(partial_unsigned_result[0], carry);
+        self.cpu.cf = partial_unsigned_result[1] ^ unsigned_result[1] != 0;
 
         self.cpu.nf = true;
 
         const signed_lhs = @bitCast(SignedInt, unsigned_lhs);
         const signed_rhs = @bitCast(SignedInt, unsigned_rhs);
-        const signed_result = @bitCast(SignedInt, unsigned_result);
-        self.cpu.pv = @as(std.meta.Int(.signed, width + 1), signed_lhs) -% signed_rhs -% carry !=
-            signed_result;
+        const partial_signed_result = @subWithOverflow(signed_lhs, signed_rhs);
+        const signed_result = @subWithOverflow(partial_signed_result[0], carry);
+        self.cpu.pv = partial_signed_result[1] ^ signed_result[1] != 0;
 
         const low_lhs = util.bit.extract(unsigned_lhs, u12, 0);
         const low_rhs = util.bit.extract(unsigned_rhs, u12, 0);
-        var low_result: u12 = undefined;
-        self.cpu.hc = @subWithOverflow(u12, low_lhs, low_rhs, &low_result) or
-            @subWithOverflow(u12, low_result, carry, &low_result);
+        const partial_low_result = @subWithOverflow(low_lhs, low_rhs);
+        const low_result = @subWithOverflow(partial_low_result[0], carry);
+        self.cpu.hc = partial_low_result[1] ^ low_result[1] != 0;
 
-        self.cpu.zf = unsigned_result == 0;
-        self.cpu.sf = signed_result < 0;
-
-        self.accumulator = unsigned_result;
+        self.cpu.zf = unsigned_result[0] == 0;
+        self.cpu.sf = signed_result[0] < 0;
+        self.accumulator = unsigned_result[0];
     }
     pub fn sbcWords(self: *State) error{}!void {
         switch (self.mode.inst) {
@@ -1001,8 +1000,8 @@ const State = struct {
 
         const low_lhs = util.bit.extract(lhs, u4, 0);
         const low_rhs = util.bit.extract(rhs, u4, 0);
-        var low_result: u4 = undefined;
-        self.cpu.hc = @subWithOverflow(u4, low_lhs, low_rhs, &low_result);
+        const low_result = @subWithOverflow(low_lhs, low_rhs);
+        self.cpu.hc = low_result[1] != 0;
 
         self.cpu.zf = result == 0;
         self.cpu.sf = @bitCast(i8, result) < 0;
@@ -1197,10 +1196,14 @@ test "ezex" {
                     while (true) {
                         if (shift_bit == 0) {
                             shift_bit = 1;
-                        } else if (@shlWithOverflow(u8, shift_bit, 1, &shift_bit)) {
-                            shift_index += 1;
-                            if (shift_index >= 64) break :shift;
-                            shift_bit = 1;
+                        } else {
+                            const shift_result = @shlWithOverflow(shift_bit, 1);
+                            shift_bit = shift_result[0];
+                            if (shift_result[1] != 0) {
+                                shift_index += 1;
+                                if (shift_index >= 64) break :shift;
+                                shift_bit = 1;
+                            }
                         }
                         if (shift_mask[shift_index] & shift_bit != 0) break;
                     }
@@ -1215,7 +1218,9 @@ test "ezex" {
                         input[index] ^= bit;
                         if (counter[index] & bit != 0) break :count;
                     }
-                    if (@shlWithOverflow(u8, bit, 1, &bit)) break;
+                    const shift_result = @shlWithOverflow(bit, 1);
+                    bit = shift_result[0];
+                    if (shift_result[1] != 0) break;
                 }
             } else break;
         }

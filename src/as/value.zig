@@ -162,7 +162,7 @@ pub fn parseLiteral(allocator: Allocator, literal: []const u8) Error!Value {
     var base: u8 = undefined;
     var number: []const u8 = undefined;
     switch (literal[0]) {
-        '"', '\'' => std.debug.todo("string literal"),
+        '"', '\'' => util.todo("string literal"),
         '$' => {
             base = 16;
             number = literal[1..];
@@ -329,7 +329,7 @@ pub fn multiply(lhs: Value, rhs: Value, allocator: Allocator) Error!Value {
     if (lhs.getBase() != null or rhs.getBase() != null) return Error.InvalidOperation;
 
     _ = allocator;
-    std.debug.todo("unimplemented");
+    util.todo("unimplemented");
 }
 pub fn divide(lhs: Value, rhs: Value, allocator: Allocator) Error!Value {
     if (lhs.getBase() != null or rhs.getBase() != null) return Error.InvalidOperation;
@@ -337,21 +337,21 @@ pub fn divide(lhs: Value, rhs: Value, allocator: Allocator) Error!Value {
         .small => |lhs_small| switch (rhs.getOffset()) {
             .small => |rhs_small| {
                 _ = .{ lhs_small, rhs_small };
-                std.debug.todo("small / small");
+                util.todo("small / small");
             },
             .big => |rhs_big| {
                 _ = .{ lhs_small, rhs_big };
-                std.debug.todo("small / big");
+                util.todo("small / big");
             },
         },
         .big => |lhs_big| switch (rhs.getOffset()) {
             .small => |rhs_small| {
                 _ = .{ lhs_big, rhs_small };
-                std.debug.todo("big / small");
+                util.todo("big / small");
             },
             .big => |rhs_big| {
                 _ = .{ lhs_big, rhs_big };
-                std.debug.todo("big / big");
+                util.todo("big / big");
             },
         },
     });

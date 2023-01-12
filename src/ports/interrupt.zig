@@ -29,7 +29,7 @@ pub fn read(self: *Interrupt, address: u12, cycles: *u64) u8 {
         0x0D => util.bit.extract(self.latch, u8, 8),
         0x0E => util.bit.extract(self.latch, u6, 16),
         0x0F => 0,
-        else => std.debug.todo("Interrupt port read unimplemented"),
+        else => util.todo("Interrupt port read unimplemented"),
     };
 }
 pub fn write(self: *Interrupt, address: u12, value: u8, cycles: *u64) void {
@@ -43,6 +43,6 @@ pub fn write(self: *Interrupt, address: u12, value: u8, cycles: *u64) void {
         0x0D => util.bit.insert(&self.latch, value, 8),
         0x0E => util.bit.insert(&self.latch, @truncate(u6, value), 16),
         0x0F => {},
-        else => std.debug.todo("Interrupt port write unimplemented"),
+        else => util.todo("Interrupt port write unimplemented"),
     }
 }

@@ -1,6 +1,10 @@
 const std = @import("std");
 const Type = std.builtin.Type;
 
+pub fn todo(comptime reason: []const u8) noreturn {
+    @panic("TODO: " ++ reason);
+}
+
 pub fn Backing(comptime T: type) type {
     return @typeInfo(T).Struct.backing_integer.?;
 }
@@ -49,7 +53,7 @@ pub const bit = struct {
 
     fn Concat(comptime Tuple: type) type {
         var bits = 0;
-        for (@typeInfo(Tuple).Struct.fields) |field| bits += @bitSizeOf(field.field_type);
+        for (@typeInfo(Tuple).Struct.fields) |field| bits += @bitSizeOf(field.type);
         return std.meta.Int(.unsigned, bits);
     }
 
@@ -198,7 +202,7 @@ fn testArgumentSplitter(
             try std.testing.expect(actual_argument != null);
             try std.testing.expectEqualStrings(expected_argument, actual_argument.?);
         }
-        try std.testing.expectEqual(null, try argument_splitter.next());
+        try std.testing.expectEqual(@as(?[:0]const u8, null), try argument_splitter.next());
     }
 
     {

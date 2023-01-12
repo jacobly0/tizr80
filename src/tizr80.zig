@@ -187,7 +187,7 @@ fn getRaw(self: *TiZr80, property: Property.Key) ?u24 {
         .flash => |address| self.mem.peek(address),
         .ram => |address| self.mem.peek(Memory.ram_start + @as(u24, address)),
         .port => |address| self.ports.peek(address),
-        else => std.debug.todo("unimplemented"),
+        else => util.todo("Unimplemented getRaw"),
     };
 }
 pub fn get(self: *TiZr80, property: Property.Key) ?u24 {
@@ -231,7 +231,7 @@ fn setRaw(self: *TiZr80, property: Property.Key, value: ?u24) void {
         .key => |key| self.ports.keypad.setKey(key, @intCast(u1, value.?)),
         .ram => |address| self.mem.poke(Memory.ram_start + @as(u24, address), @intCast(u8, value.?)),
         .port => |address| self.ports.poke(address, @intCast(u8, value.?)),
-        else => std.debug.todo("unimplemented"),
+        else => util.todo("Unimplemented setRaw"),
     }
 }
 pub fn set(self: *TiZr80, property: Property.Key, value: ?u24) void {
