@@ -172,6 +172,7 @@ pub fn init(self: *Commands, allocator: std.mem.Allocator) !void {
     (try load_group.addCommand(allocator, "rom", .native)).* = .{ .handler = &loadRom };
 
     const save_group = try root_group.addCommand(allocator, "save", .group);
+    (try save_group.addCommand(allocator, "lcd", .native)).* = .{ .handler = &saveLcd };
     (try save_group.addCommand(allocator, "rom", .native)).* = .{ .handler = &saveRom };
 }
 pub fn deinit(self: *Commands, allocator: std.mem.Allocator) void {
@@ -225,6 +226,16 @@ fn loadRom(self: *Commands, arguments: []const [:0]const u8) Error!i32 {
     defer file.close();
 
     return @boolToInt(try file.readAll(self.core().mem.flash) < self.core().mem.flash.len);
+}
+
+fn saveLcd(self: *Commands, arguments: []const [:0]const u8) Error!i32 {
+    if (arguments.len != 1) return Error.InvalidArguments;
+
+    const file = try std.fs.cwd().createFileZ(arguments[0], .{});
+    defer file.close();
+
+    try file.writeAll(self.core().mem.ram[0x40000..0x65800]);
+    return 0;
 }
 
 fn saveRom(self: *Commands, arguments: []const [:0]const u8) Error!i32 {

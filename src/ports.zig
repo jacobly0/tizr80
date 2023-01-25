@@ -3,14 +3,17 @@ const std = @import("std");
 const Backlight = @import("ports/backlight.zig");
 const Dummy = @import("ports/dummy.zig");
 const Flash = @import("ports/flash.zig");
+const Gpt = @import("ports/gpt.zig");
 const Interrupt = @import("ports/interrupt.zig");
 const Keypad = @import("ports/keypad.zig");
 const Lcd = @import("ports/lcd.zig");
 const Port0 = @import("ports/port0.zig");
 const Ports = @This();
+const Rtc = @import("ports/rtc.zig");
 const Sha256 = @import("ports/sha256.zig");
 const Spi = @import("ports/spi.zig");
 const TiZr80 = @import("tizr80.zig");
+const Usb = @import("ports/usb.zig");
 const util = @import("util.zig");
 
 pub const Handler = struct {
@@ -43,8 +46,11 @@ handlers: [0x10]Handler,
 port0: Port0,
 flash: Flash,
 sha256: Sha256,
+usb: Usb,
 lcd: Lcd,
 interrupt: Interrupt,
+gpt: Gpt,
+rtc: Rtc,
 keypad: Keypad,
 backlight: Backlight,
 spi: Spi,
@@ -65,6 +71,10 @@ pub fn init(self: *Ports, allocator: std.mem.Allocator) !void {
     errdefer self.sha256.deinit(allocator);
     self.handlers[0x2] = Handler.init(&self.sha256);
 
+    try self.usb.init(allocator);
+    errdefer self.usb.deinit(allocator);
+    self.handlers[0x3] = Handler.init(&self.usb);
+
     try self.lcd.init(allocator);
     errdefer self.lcd.deinit(allocator);
     self.handlers[0x4] = Handler.init(&self.lcd);
@@ -72,6 +82,14 @@ pub fn init(self: *Ports, allocator: std.mem.Allocator) !void {
     try self.interrupt.init(allocator);
     errdefer self.interrupt.deinit(allocator);
     self.handlers[0x5] = Handler.init(&self.interrupt);
+
+    try self.gpt.init(allocator);
+    errdefer self.gpt.deinit(allocator);
+    self.handlers[0x7] = Handler.init(&self.gpt);
+
+    try self.rtc.init(allocator);
+    errdefer self.rtc.deinit(allocator);
+    self.handlers[0x8] = Handler.init(&self.rtc);
 
     try self.keypad.init(allocator);
     errdefer self.keypad.deinit(allocator);
@@ -89,6 +107,8 @@ pub fn deinit(self: *Ports, allocator: std.mem.Allocator) void {
     self.spi.deinit(allocator);
     self.backlight.deinit(allocator);
     self.keypad.deinit(allocator);
+    self.rtc.deinit(allocator);
+    self.gpt.deinit(allocator);
     self.interrupt.deinit(allocator);
     self.lcd.deinit(allocator);
     self.sha256.deinit(allocator);

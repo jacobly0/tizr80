@@ -24,14 +24,21 @@ pub fn deinit(self: *Keypad, _: std.mem.Allocator) void {
 pub fn read(_: *Keypad, address: u12, cycles: *u64) u8 {
     cycles.* +%= 3;
     return switch (@truncate(u7, address)) {
-        else => util.todo("Keypad port read unimplemented"),
+        0x8 => 0,
+        else => {
+            std.debug.print("read 0x{X}\n", .{address});
+            util.todo("Keypad port read unimplemented");
+        },
     };
 }
 pub fn write(_: *Keypad, address: u12, _: u8, cycles: *u64) void {
     cycles.* +%= 3;
     switch (@truncate(u7, address)) {
-        0x0...0x5 => {},
-        else => util.todo("Keypad port write unimplemented"),
+        0x0...0x5, 0x8, 0xC => {},
+        else => {
+            std.debug.print("write 0x{X}\n", .{address});
+            util.todo("Keypad port write unimplemented");
+        },
     }
 }
 

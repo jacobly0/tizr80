@@ -26,13 +26,19 @@ pub fn read(self: *Port0, address: u12, cycles: *u64) u8 {
     cycles.* +%= 2;
     return switch (@truncate(u8, address)) {
         0x02 => 0,
+        0x03 => 0,
         0x05 => self.port_access,
+        0x06 => 0,
         0x07...0x0C => |addr| self.gpio[addr - 0x07],
         0x0D => util.bit.concat(.{ self.power, self.power }),
         0x0F => 0,
         0x1D...0x25 => |addr| self.region[addr - 0x1D],
+        0x28 => 0,
         0x3A...0x3C => |addr| self.stack_protector[addr - 0x3A],
-        else => util.todo("Port0 port read unimplemented"),
+        else => {
+            std.debug.print("read 0x{X}\n", .{address});
+            util.todo("Port0 port read unimplemented");
+        },
     };
 }
 pub fn write(self: *Port0, address: u12, value: u8, cycles: *u64) void {
@@ -43,8 +49,12 @@ pub fn write(self: *Port0, address: u12, value: u8, cycles: *u64) void {
         0x07...0x0C => |addr| self.gpio[addr - 0x07] = value,
         0x0D => self.power = util.bit.extract(value, u4, 0),
         0x1D...0x25 => |addr| self.region[addr - 0x1D] = value,
+        0x28 => {},
         0x3A...0x3C => |addr| self.stack_protector[addr - 0x3A] = value,
-        else => util.todo("Port0 port write unimplemented"),
+        else => {
+            std.debug.print("write 0x{X}\n", .{address});
+            util.todo("Port0 port write unimplemented");
+        },
     }
 }
 

@@ -378,6 +378,7 @@ fn wrapCommandResult(result: TiZr80.CommandSplitError!i32) c_int {
         error.InvalidHandle, error.NotOpenForReading, error.NotOpenForWriting => std.c.E.BADF,
         error.IsDir => std.c.E.ISDIR,
         error.NameTooLong => std.c.E.NAMETOOLONG,
+        error.NetNameDeleted => std.c.E.NETUNREACH,
         error.NoDevice => std.c.E.NODEV,
         error.NoSpaceLeft => std.c.E.NOSPC,
         error.NotDir => std.c.E.NOTDIR,
