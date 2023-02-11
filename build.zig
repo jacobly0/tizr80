@@ -1,6 +1,8 @@
 const std = @import("std");
+const Build = std.Build;
+const FileSource = Build.FileSource;
 
-pub fn build(b: *std.build.Builder) !void {
+pub fn build(b: *Build) !void {
     const project_name = std.fs.path.basename(b.build_root);
 
     const max_supported_glibc_version = std.builtin.Version{ .major = 2, .minor = 34, .patch = 0 };
@@ -8,10 +10,9 @@ pub fn build(b: *std.build.Builder) !void {
         b.host.target.os.version_range.linux.glibc.order(max_supported_glibc_version).compare(.gt))
     target: {
         break :target std.zig.CrossTarget{ .glibc_version = max_supported_glibc_version };
-    } else null;
+    } else std.zig.CrossTarget{};
 
-    const mode = b.standardReleaseOptions();
-    const debug_mode = b.option(bool, "debug", "Optimizations off and safety on") orelse false;
+    const optimize = b.standardOptimizeOption(.{});
     const debugger = b.option(
         bool,
         "debugger",
@@ -20,12 +21,6 @@ pub fn build(b: *std.build.Builder) !void {
     const strip = b.option(bool, "strip", "Omit debug symbols. (default: false)") orelse false;
     const test_filter = b.option([]const u8, "test-filter", "Skip tests that do not match filter.");
     b.verbose = b.option(bool, "verbose", "Verbose build output. (default: false)") orelse false;
-
-    if (mode != .Debug and debug_mode) {
-        std.log.err("Both debug (-Ddebug) and release (of -Drelease-safe, " ++
-            "-Drelease-fast and -Drelease-small)\n", .{});
-        b.invalid_user_input = true;
-    }
 
     const options = b.addOptions();
     options.addOption(bool, "debugger", debugger);
@@ -66,14 +61,17 @@ pub fn build(b: *std.build.Builder) !void {
         .exclude_extensions = &.{"~"},
     });
 
-    const main_pkg = std.build.Pkg{
+    const main_src = FileSource.relative(b.fmt("src/{s}.zig", .{project_name}));
+    b.addModule(.{
         .name = project_name,
-        .source = std.build.FileSource.relative(b.fmt("src/{s}.zig", .{project_name})),
-    };
+        .source_file = main_src,
+    });
 
-    const main_tests = b.addTestSource(main_pkg.source);
-    if (target) |cross_target| main_tests.setTarget(cross_target);
-    main_tests.setBuildMode(mode);
+    const main_tests = b.addTest(.{
+        .root_source_file = main_src,
+        .optimize = optimize,
+        .target = target,
+    });
     main_tests.setFilter(test_filter);
     main_tests.addOptions("options", options);
 
@@ -81,24 +79,35 @@ pub fn build(b: *std.build.Builder) !void {
     test_step.dependOn(fmt_step);
     test_step.dependOn(&main_tests.step);
 
-    const src_capi = "src/capi.zig";
+    const src_capi = FileSource.relative("src/capi.zig");
     const libraries = .{
-        .static = b.addStaticLibrary(project_name, src_capi),
-        .shared = b.addSharedLibrary(project_name, src_capi, .unversioned),
+        .static = b.addStaticLibrary(.{
+            .name = project_name,
+            .root_source_file = src_capi,
+            .target = target,
+            .optimize = optimize,
+        }),
+        .shared = b.addSharedLibrary(.{
+            .name = project_name,
+            .root_source_file = src_capi,
+            .target = target,
+            .optimize = optimize,
+        }),
     };
     inline for (@typeInfo(@TypeOf(libraries)).Struct.fields) |field| {
         const library = @field(libraries, field.name);
         library.strip = strip;
-        if (target) |cross_target| library.setTarget(cross_target);
-        library.setBuildMode(mode);
         library.addOptions("options", options);
         library.linkLibC();
         library.install();
         library.step.dependOn(fmt_step);
 
-        const test_api = b.addExecutable("test-capi-" ++ field.name, null);
-        if (target) |cross_target| test_api.setTarget(cross_target);
-        switch (mode) {
+        const test_api = b.addExecutable(.{
+            .name = "test-capi-" ++ field.name,
+            .target = target,
+            .optimize = optimize,
+        });
+        switch (optimize) {
             .Debug => {},
             .ReleaseSafe, .ReleaseFast, .ReleaseSmall => test_api.defineCMacro("NDEBUG", null),
         }
@@ -118,13 +127,13 @@ pub fn build(b: *std.build.Builder) !void {
             test_step.dependOn(&test_api.run().step);
     }
 
-    const zig_example = b.addExecutable(
-        b.fmt("{s}-example-zig", .{project_name}),
-        "example/zig/main.zig",
-    );
-    zig_example.setBuildMode(mode);
+    const zig_example = b.addExecutable(.{
+        .name = b.fmt("{s}-example-zig", .{project_name}),
+        .root_source_file = FileSource.relative("example/zig/main.zig"),
+        .optimize = optimize,
+    });
     zig_example.addOptions("options", options);
-    zig_example.addPackage(main_pkg);
+    zig_example.addModule(project_name, b.modules.get(project_name).?);
     zig_example.install();
     zig_example.step.dependOn(fmt_step);
 
